@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -28,10 +29,23 @@ class Post(BaseModel):
     comments: list[Comment] = []
 
 
+class Opportunity(BaseModel):
+    type: Literal["investment", "product", "business", "content"]
+    description: str
+    rationale: str
+    risk_level: Literal["low", "medium", "high"]
+    time_horizon: Literal["short", "medium", "long"]
+
+
 class AnalysisResult(BaseModel):
     post_id: str
     summary: str
-    themes: list[str]
+    sentiment: Literal["bullish", "bearish", "neutral", "mixed"]
+    key_topics: list[str]
     pain_points: list[str]
-    recommendations: list[str]
+    user_intents: list[str]
+    market_signals: list[str]
+    opportunities: list[Opportunity]
+    contrarian_insights: list[str]
+    confidence_score: int
     analyzed_at: datetime
