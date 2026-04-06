@@ -1,0 +1,21 @@
+{
+  "reddit": {
+    "client_id": "",
+    "client_secret": "",
+    "user_agent": "reddit-insight-engine/0.1",
+    "subreddit": "finance_ukr",
+    "post_limit": 10,
+    "comment_limit": 10
+  },
+  "openai": {
+    "api_key": "",
+    "model": "gpt-4o",
+    "max_tokens": 1024
+  },
+  "storage": {
+    "db_path": "data/insights.duckdb"
+  },
+  "logging": {
+    "level": "INFO"
+  }
+}

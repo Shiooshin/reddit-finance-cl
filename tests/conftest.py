@@ -1,7 +1,9 @@
 """Shared pytest fixtures."""
 
-# Example:
+import pytest
+
+
 # @pytest.fixture()
-# def sample_instance():
-#     from main.core import MyClass
-#     return MyClass("fixture")
+# def sample_post() -> Post:
+#     from main.models import Post
+#     return Post(...)
