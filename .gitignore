@@ -42,3 +42,9 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
+
+# Project secrets
+config.json
+
+# Data files
+data/*.duckdb

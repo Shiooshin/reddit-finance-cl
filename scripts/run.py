@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
-"""One-off runner / dev entrypoint.
+"""Entry point — loads config and runs the pipeline."""
 
-Usage:
-    python scripts/run.py
-"""
-
+from main.config import get_config
 from main.logger import configure_root
-from main.core import main
+from main.pipeline import Pipeline
 
 if __name__ == "__main__":
-    configure_root()
-    main()
+    config = get_config()
+    configure_root(level=config.logging.level)
+    Pipeline().run()
