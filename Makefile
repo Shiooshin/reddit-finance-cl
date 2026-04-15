@@ -1,7 +1,10 @@
-.PHONY: install shell test lint format typecheck clean
+.PHONY: install shell run test lint format typecheck clean
 
 install:
 	poetry install
+
+run:
+	poetry run python main.py
 
 shell:
 	poetry shell

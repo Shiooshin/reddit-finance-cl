@@ -9,7 +9,8 @@ import duckdb
 
 from main.config import get_config
 from main.logger import get_logger
-from main.models import AnalysisResult, Comment, Post
+from main.models import AnalysisResult, Post
+from main.writer import AbstractWriter
 
 log = get_logger(__name__)
 
@@ -54,8 +55,8 @@ CREATE TABLE IF NOT EXISTS analysis_results (
 """
 
 
-class Storage:
-    """Handles all read/write operations against the DuckDB database."""
+class DuckDBWriter(AbstractWriter):
+    """Persists posts, comments, and analysis results to a DuckDB database."""
 
     def __init__(self) -> None:
         db_path = get_config().storage.db_path
@@ -64,10 +65,26 @@ class Storage:
         self._conn.execute(_CREATE_POSTS)
         self._conn.execute(_CREATE_COMMENTS)
         self._conn.execute(_CREATE_ANALYSIS)
-        log.info("Storage connected: %s", db_path)
+        log.info("DuckDBWriter connected: %s", db_path)
 
-    def save_post(self, post: Post) -> None:
-        """Persist a post and its comments. No-op if post ID already exists."""
+    def write_raw_posts(self, posts: list[Post]) -> None:
+        """Persist a list of posts and their comments. Skips already-stored posts."""
+        for post in posts:
+            self._save_post(post)
+
+    def write_analytical_results(self, results: list[AnalysisResult]) -> None:
+        """Persist a list of analysis results."""
+        for result in results:
+            self._save_analysis(result)
+
+    def post_exists(self, post_id: str) -> bool:
+        """Return True if the post has already been stored."""
+        row = self._conn.execute(
+            "SELECT COUNT(*) FROM posts WHERE id = ?", [post_id]
+        ).fetchone()
+        return bool(row and row[0] > 0)
+
+    def _save_post(self, post: Post) -> None:
         if self.post_exists(post.id):
             log.debug("Post %s already stored, skipping", post.id)
             return
@@ -92,61 +109,7 @@ class Storage:
             )
         log.debug("Saved post %s with %d comments", post.id, len(post.comments))
 
-    def post_exists(self, post_id: str) -> bool:
-        """Return True if the post has already been stored."""
-        row = self._conn.execute(
-            "SELECT COUNT(*) FROM posts WHERE id = ?", [post_id]
-        ).fetchone()
-        return bool(row and row[0] > 0)
-
-    def get_unanalyzed_posts(self) -> list[Post]:
-        """Return posts that have been stored but not yet analyzed."""
-        rows = self._conn.execute(
-            """
-            SELECT p.id, p.title, p.selftext, p.author, p.score,
-                   p.num_comments, p.created_at, p.url
-            FROM posts p
-            LEFT JOIN analysis_results a ON p.id = a.post_id
-            WHERE a.post_id IS NULL
-            """
-        ).fetchall()
-
-        posts = []
-        for row in rows:
-            post_id = row[0]
-            comments = self._fetch_comments(post_id)
-            posts.append(Post(
-                id=post_id,
-                title=row[1],
-                selftext=row[2],
-                author=row[3],
-                score=row[4],
-                num_comments=row[5],
-                created_at=row[6],
-                url=row[7],
-                comments=comments,
-            ))
-        log.debug("Found %d unanalyzed posts", len(posts))
-        return posts
-
-    def _fetch_comments(self, post_id: str) -> list[Comment]:
-        rows = self._conn.execute(
-            """
-            SELECT id, post_id, body, author, score, created_at
-            FROM comments WHERE post_id = ?
-            """,
-            [post_id],
-        ).fetchall()
-        return [
-            Comment(
-                id=r[0], post_id=r[1], body=r[2],
-                author=r[3], score=r[4], created_at=r[5],
-            )
-            for r in rows
-        ]
-
-    def save_analysis(self, result: AnalysisResult) -> None:
-        """Persist an analysis result."""
+    def _save_analysis(self, result: AnalysisResult) -> None:
         self._conn.execute(
             """
             INSERT INTO analysis_results (
