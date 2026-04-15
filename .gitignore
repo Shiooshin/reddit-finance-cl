@@ -48,3 +48,6 @@ config.json
 
 # Data files
 data/*.duckdb
+
+# Logs
+logs/
