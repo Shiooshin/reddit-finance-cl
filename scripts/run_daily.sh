@@ -19,4 +19,4 @@ echo "--- $(date '+%Y-%m-%d %H:%M:%S') starting ---"
 
 cd "${REPO_DIR}"
 
-exec poetry run python main.py
+exec poetry run python run.py

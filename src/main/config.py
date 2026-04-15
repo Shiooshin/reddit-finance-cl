@@ -11,12 +11,13 @@ _CONFIG_PATH = Path("config.json")
 
 
 class RedditConfig(BaseModel):
-    client_id: str
-    client_secret: str
-    user_agent: str
     subreddit: str
     post_limit: int
     comment_limit: int
+    # PRAW-only — not used by PlaywrightScraper
+    client_id: str = ""
+    client_secret: str = ""
+    user_agent: str = ""
 
 
 class OpenAIConfig(BaseModel):
@@ -49,7 +50,7 @@ _config: Config | None = None
 
 
 def get_config() -> Config:
-    """Return the singleton Config instance, loading config.json on first call."""
+    """Return the singleton Config, loading config.json on first call."""
     global _config
     if _config is None:
         _config = Config.load()

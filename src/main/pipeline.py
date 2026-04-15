@@ -6,7 +6,7 @@ from main.analyzer import Analyzer
 from main.logger import get_logger
 from main.print_writer import PrintWriter
 from main.processor import Processor
-from main.scraper import RedditScraper
+from main.scraper_playwright import PlaywrightScraper
 
 log = get_logger(__name__)
 
@@ -15,7 +15,7 @@ class Pipeline:
     """Wires all modules together and defines execution order."""
 
     def __init__(self) -> None:
-        self.scraper = RedditScraper()
+        self.scraper = PlaywrightScraper()  # RedditScraper()
         self.processor = Processor()
         self.analyzer = Analyzer()
         self.writer = PrintWriter()  # DuckDBWriter()
@@ -27,7 +27,7 @@ class Pipeline:
         log.info("Step 1/3 — scraping posts")
         posts = self.scraper.fetch_posts()
         log.info("Fetched %d posts", len(posts))
-        
+
         if not posts:
             log.info("No new posts to analyze")
             return
@@ -39,7 +39,6 @@ class Pipeline:
         log.info("Step 3/3 — processing and analyzing posts")
         results = self.processor.process(posts, self.analyzer)
 
-        # self.writer.write_analytical_results(results)
         self.writer.write_analytical_results(results)
 
         log.info("Pipeline complete — %d posts analyzed", len(results))

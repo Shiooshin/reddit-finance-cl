@@ -57,7 +57,9 @@ class RedditScraper:
                 author=str(submission.author) if submission.author else "[deleted]",
                 score=submission.score,
                 num_comments=submission.num_comments,
-                created_at=datetime.fromtimestamp(submission.created_utc, tz=timezone.utc),
+                created_at=datetime.fromtimestamp(
+                    submission.created_utc, tz=timezone.utc
+                ),
                 url=submission.url,
                 comments=comments,
             )
