@@ -10,8 +10,20 @@ class PrintWriter(AbstractWriter):
     """Writes analytical results to stdout. Does not handle raw post storage."""
 
     def write_raw_posts(self, posts: list[Post]) -> None:
-        # No-op since we're not actually storing raw posts in this impl
-        pass
+        for post in posts:
+            print(f"\n{'=' * 60}")
+            print(f"Post:     {post.id}")
+            print(f"Title:    {post.title}")
+            print(f"Author:   {post.author}  score={post.score}")
+            print(f"Created:  {post.created_at.strftime('%Y-%m-%d %H:%M UTC')}")
+            print(f"URL:      {post.url}")
+            if post.selftext:
+                print(f"Body:     {post.selftext}")
+            if post.comments:
+                print("Comments:")
+                for comment in post.comments:
+                    print(f"  [{comment.score:+d}] {comment.author}: {comment.body}")
+        print(f"\n{'=' * 60}")
 
     def write_analytical_results(self, results: list[AnalysisResult]) -> None:
         for result in results:

@@ -21,7 +21,7 @@ source .venv/bin/activate
 ```bash
 python scripts/run.py
 # or without activating the venv:
-poetry run python scripts/run.py
+poetry run python scripts/main.py
 ```
 
 ## Development

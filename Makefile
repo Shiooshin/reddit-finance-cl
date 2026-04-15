@@ -4,7 +4,7 @@ install:
 	poetry install
 
 run:
-	poetry run python main.py
+	poetry run python run.py
 
 shell:
 	poetry shell
@@ -14,6 +14,7 @@ test:
 
 lint:
 	poetry run ruff check src tests
+	poetry run flake8 src/ tests/
 
 format:
 	poetry run ruff format src tests
