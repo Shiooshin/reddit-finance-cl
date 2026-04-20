@@ -85,7 +85,7 @@ class Analyzer:
         response = self._client.chat.completions.create(
             model=self._model,
             temperature=0.2,
-            max_tokens=self._max_tokens,
+            max_completion_tokens=self._max_tokens,
             response_format={"type": "json_object"},
             messages=[
                 {"role": "system", "content": _SYSTEM_PROMPT},

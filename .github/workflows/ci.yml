@@ -5,19 +5,27 @@ on:
   pull_request:
 
 jobs:
-  # TODO: replace stubs below with real steps
-
   test:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: echo "TODO: install deps and run tests"
 
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: echo "TODO: run linter"
+      - name: Install Poetry
+        run: pip install poetry
+
+      - name: Install dependencies
+        run: poetry install --with dev
+
+      - name: Lint — ruff
+        run: poetry run ruff check src tests
+
+      - name: Type check — mypy
+        run: poetry run mypy src
+
+      - name: Run tests
+        run: poetry run pytest
