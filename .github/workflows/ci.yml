@@ -25,7 +25,7 @@ jobs:
         run: poetry run ruff check src tests
 
       - name: Type check — mypy
-        run: poetry run mypy src
+        run: poetry run mypy --python-executable $(poetry run which python) src
 
       - name: Run tests
-        run: poetry run pytest
+        run: poetry run pytest || [ $? -eq 5 ]  # exit 5 = no tests collected (expected until tests are written)

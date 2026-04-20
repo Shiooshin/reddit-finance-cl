@@ -5,8 +5,8 @@ from __future__ import annotations
 import os
 from datetime import UTC, datetime
 
-import praw
-import praw.models
+import praw  # type: ignore[import-untyped]
+import praw.models  # type: ignore[import-untyped]
 
 from main.config import get_config
 from main.logger import get_logger
