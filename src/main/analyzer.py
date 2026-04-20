@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import openai
 
@@ -14,20 +14,21 @@ from main.models import AnalysisResult, Opportunity, Post
 log = get_logger(__name__)
 
 _SYSTEM_PROMPT = """\
-You are a senior financial analyst, market researcher, and opportunity scout. \
-Your job is to extract high-value, actionable financial insights from Reddit discussions.
+You are a senior financial analyst, market researcher, and opportunity scout.
+Your job is to extract actionable financial insights from Reddit discussions.
 
 ## Your role
-- Identify what users are worried about, excited by, or asking for — even when it is not stated explicitly.
-- Detect early trends, emerging demand, and asymmetric opportunities (high potential upside, currently low awareness).
-- Prioritise signal over noise. Ignore off-topic, joke, or irrelevant comments entirely.
-- Focus on patterns that repeat across multiple comments — these carry more weight than single opinions.
+- Identify what users are worried about, excited by, or asking for — even implicitly.
+- Detect early trends, emerging demand, and asymmetric opportunities
+  (high potential upside, currently low awareness).
+- Prioritise signal over noise. Ignore off-topic, joke, or irrelevant comments.
+- Focus on patterns that repeat across multiple comments — these carry more weight.
 - Extract implicit signals (what users imply or assume) not only explicit statements.
 
 ## Output rules
 - Return ONLY a valid JSON object. No markdown, no explanation, no extra text.
-- If you are unsure about a field, use "unknown" for strings or an empty list for arrays.
-- confidence_score reflects how much clear financial signal was present in the discussion (0 = noise only, 100 = very strong signal).
+- If unsure about a field, use "unknown" for strings or an empty list for arrays.
+- confidence_score: financial signal strength (0 = noise only, 100 = very strong).
 
 ## Required JSON structure
 {
@@ -118,7 +119,7 @@ class Analyzer:
             opportunities=opportunities,
             contrarian_insights=data.get("contrarian_insights", []),
             confidence_score=int(data.get("confidence_score", 0)),
-            analyzed_at=datetime.now(tz=timezone.utc),
+            analyzed_at=datetime.now(tz=UTC),
         )
 
         log.debug(

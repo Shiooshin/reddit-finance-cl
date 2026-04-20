@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import praw
 import praw.models
@@ -58,7 +58,7 @@ class RedditScraper:
                 score=submission.score,
                 num_comments=submission.num_comments,
                 created_at=datetime.fromtimestamp(
-                    submission.created_utc, tz=timezone.utc
+                    submission.created_utc, tz=UTC
                 ),
                 url=submission.url,
                 comments=comments,
@@ -97,7 +97,7 @@ class RedditScraper:
                 body=c.body,
                 author=str(c.author) if c.author else "[deleted]",
                 score=c.score,
-                created_at=datetime.fromtimestamp(c.created_utc, tz=timezone.utc),
+                created_at=datetime.fromtimestamp(c.created_utc, tz=UTC),
             )
             for c in top_comments
         ]

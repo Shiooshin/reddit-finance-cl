@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import random
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from playwright.async_api import BrowserContext, async_playwright
@@ -192,7 +192,7 @@ class PlaywrightScraper:
                         author=d.get("author") or "[deleted]",
                         score=d.get("score", 0),
                         created_at=datetime.fromtimestamp(
-                            d.get("created_utc", 0), tz=timezone.utc
+                            d.get("created_utc", 0), tz=UTC
                         ),
                     ))
         except Exception as exc:
@@ -218,7 +218,7 @@ def _build_post(raw: dict[str, Any], comments: list[Comment]) -> Post:
         score=raw.get("score", 0),
         num_comments=raw.get("num_comments", 0),
         created_at=datetime.fromtimestamp(
-            raw.get("created_utc", 0), tz=timezone.utc
+            raw.get("created_utc", 0), tz=UTC
         ),
         url=raw.get("url", ""),
         comments=comments,
