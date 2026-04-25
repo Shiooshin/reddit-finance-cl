@@ -93,6 +93,19 @@ resource "aws_s3_bucket_public_access_block" "data" {
   restrict_public_buckets = true
 }
 
+# ─── SSM Parameter Store (runtime secrets) ───────────────────────────────────
+
+resource "aws_ssm_parameter" "openai_api_key" {
+  name        = "/reddit-finance/openai_api_key"
+  description = "OpenAI API key consumed by the pipeline container at task start"
+  type        = "SecureString"
+  value       = "REPLACE_ME"
+
+  lifecycle {
+    ignore_changes = [value]
+  }
+}
+
 # ─── ECS Cluster ─────────────────────────────────────────────────────────────
 
 resource "aws_ecs_cluster" "main" {
