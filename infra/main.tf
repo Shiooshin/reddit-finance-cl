@@ -6,11 +6,7 @@ terraform {
       version = "~> 5.0"
     }
   }
-  backend "s3" {
-    bucket = "reddit-poc-cl-581282195129-us-east-1-an"
-    key    = "reddit-finance/terraform.tfstate"
-    region = "us-east-1"
-  }
+  backend "s3" {}
 }
 
 provider "aws" {
