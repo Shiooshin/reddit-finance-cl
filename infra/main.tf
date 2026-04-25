@@ -6,12 +6,11 @@ terraform {
       version = "~> 5.0"
     }
   }
-  # Uncomment and configure after creating the state bucket manually:
   backend "s3" {
-     bucket = "reddit-poc-cl-581282195129-us-east-1-an"
-     key    = "reddit-finance/terraform.tfstate"
-     region = "us-east-1"
-   }
+    bucket = "reddit-poc-cl-581282195129-us-east-1-an"
+    key    = "reddit-finance/terraform.tfstate"
+    region = "us-east-1"
+  }
 }
 
 provider "aws" {
@@ -143,7 +142,7 @@ resource "aws_ecs_cluster" "main" {
 
   setting {
     name  = "containerInsights"
-    value = "disabled"  # Saves ~$2-3/month; enable if you need metrics dashboard
+    value = "disabled" # Saves ~$2-3/month; enable if you need metrics dashboard
   }
 }
 
@@ -257,8 +256,8 @@ resource "aws_ecs_task_definition" "pipeline" {
   family                   = "reddit-finance-pipeline"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
-  cpu                      = "512"   # 0.5 vCPU
-  memory                   = "1024"  # 1 GB — sufficient for Chromium + DuckDB
+  cpu                      = "512"  # 0.5 vCPU
+  memory                   = "1024" # 1 GB — sufficient for Chromium + DuckDB
   execution_role_arn       = aws_iam_role.task_execution.arn
   task_role_arn            = aws_iam_role.task_role.arn
 
@@ -395,8 +394,8 @@ resource "aws_iam_role_policy" "scheduler_ecs" {
         Resource = "${local.task_definition_family_arn}:*"
       },
       {
-        Effect   = "Allow"
-        Action   = ["iam:PassRole"]
+        Effect = "Allow"
+        Action = ["iam:PassRole"]
         Resource = [
           aws_iam_role.task_execution.arn,
           aws_iam_role.task_role.arn,
@@ -413,7 +412,7 @@ resource "aws_scheduler_schedule" "daily" {
   group_name = "default"
 
   flexible_time_window {
-    mode = "OFF"  # Run at exactly the scheduled time, no flexibility window
+    mode = "OFF" # Run at exactly the scheduled time, no flexibility window
   }
 
   schedule_expression          = var.schedule_cron
@@ -437,7 +436,7 @@ resource "aws_scheduler_schedule" "daily" {
 
     retry_policy {
       maximum_retry_attempts       = 2
-      maximum_event_age_in_seconds = 3600  # Don't retry if event is >1 hour old
+      maximum_event_age_in_seconds = 3600 # Don't retry if event is >1 hour old
     }
   }
 
