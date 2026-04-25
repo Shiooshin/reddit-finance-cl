@@ -392,7 +392,7 @@ resource "aws_iam_role_policy" "scheduler_ecs" {
       {
         Effect   = "Allow"
         Action   = ["ecs:RunTask"]
-        Resource = aws_ecs_task_definition.pipeline.arn
+        Resource = "${local.task_definition_family_arn}:*"
       },
       {
         Effect   = "Allow"
@@ -424,7 +424,7 @@ resource "aws_scheduler_schedule" "daily" {
     role_arn = aws_iam_role.scheduler.arn
 
     ecs_parameters {
-      task_definition_arn = aws_ecs_task_definition.pipeline.arn
+      task_definition_arn = local.task_definition_family_arn
       launch_type         = "FARGATE"
       task_count          = 1
 
@@ -439,5 +439,9 @@ resource "aws_scheduler_schedule" "daily" {
       maximum_retry_attempts       = 2
       maximum_event_age_in_seconds = 3600  # Don't retry if event is >1 hour old
     }
+  }
+
+  lifecycle {
+    ignore_changes = [target[0].ecs_parameters[0].task_definition_arn]
   }
 }
