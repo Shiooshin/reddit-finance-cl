@@ -16,6 +16,12 @@ terraform {
 
 provider "aws" {
   region = var.aws_region
+
+  default_tags {
+    tags = {
+      Project = "reddit-poc"
+    }
+  }
 }
 
 # ─── ECR ─────────────────────────────────────────────────────────────────────
@@ -73,18 +79,6 @@ resource "aws_s3_bucket_public_access_block" "data" {
   block_public_policy     = true
   ignore_public_acls      = true
   restrict_public_buckets = true
-}
-
-resource "aws_s3_bucket_lifecycle_configuration" "data" {
-  bucket = aws_s3_bucket.data.id
-
-  rule {
-    id     = "expire-old-versions"
-    status = "Enabled"
-    noncurrent_version_expiration {
-      noncurrent_days = 30
-    }
-  }
 }
 
 # ─── ECS Cluster ─────────────────────────────────────────────────────────────
@@ -278,7 +272,7 @@ resource "aws_scheduler_schedule" "daily" {
       task_count          = 1
 
       network_configuration {
-        assign_public_ip = "ENABLED"  # Required for public subnet (avoids $32/mo NAT Gateway)
+        assign_public_ip = true # Required for public subnet (avoids $32/mo NAT Gateway)
         subnets          = data.aws_subnets.default.ids
         security_groups  = [aws_security_group.pipeline_task.id]
       }
