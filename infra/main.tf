@@ -7,11 +7,11 @@ terraform {
     }
   }
   # Uncomment and configure after creating the state bucket manually:
-  # backend "s3" {
-  #   bucket = "YOUR_TF_STATE_BUCKET"
-  #   key    = "reddit-finance/terraform.tfstate"
-  #   region = "us-east-1"
-  # }
+  backend "s3" {
+     bucket = "reddit-poc-cl-581282195129-us-east-1-an"
+     key    = "reddit-finance/terraform.tfstate"
+     region = "us-east-1"
+   }
 }
 
 provider "aws" {
@@ -22,6 +22,18 @@ provider "aws" {
       Project = "reddit-poc"
     }
   }
+}
+
+# ─── Lookups & locals ────────────────────────────────────────────────────────
+
+data "aws_caller_identity" "current" {}
+
+data "aws_kms_alias" "ssm" {
+  name = "alias/aws/ssm"
+}
+
+locals {
+  task_definition_family_arn = "arn:aws:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:task-definition/${aws_ecs_task_definition.pipeline.family}"
 }
 
 # ─── ECR ─────────────────────────────────────────────────────────────────────
