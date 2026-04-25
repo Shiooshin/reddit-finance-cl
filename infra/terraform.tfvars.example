@@ -1,0 +1,5 @@
+# Copy this file to terraform.tfvars and fill in real values.
+# terraform.tfvars is gitignored.
+
+# S3 bucket that stores insights.duckdb. Must already exist.
+s3_data_bucket = "reddit-poc-<account-id>-<region>-<suffix>"

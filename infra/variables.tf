@@ -7,7 +7,6 @@ variable "aws_region" {
 variable "s3_data_bucket" {
   description = "Name of the S3 bucket to store insights.duckdb"
   type        = string
-  default     = "reddit-poc-cl-581282195129-us-east-1-an"
 }
 
 variable "ecr_image_uri" {
