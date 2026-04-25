@@ -51,3 +51,5 @@ data/*.duckdb
 
 # Logs
 logs/
+
+features/

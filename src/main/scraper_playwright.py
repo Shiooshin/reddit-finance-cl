@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import random
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
-from playwright.async_api import BrowserContext, Page, async_playwright
+from playwright.async_api import BrowserContext, async_playwright
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from main.config import get_config
@@ -26,10 +26,7 @@ _USER_AGENT = (
 
 _HEADERS = {
     "Accept-Language": "en-US,en;q=0.9",
-    "Accept": (
-        "text/html,application/xhtml+xml,application/xml;"
-        "q=0.9,image/avif,image/webp,*/*;q=0.8"
-    ),
+    "Accept": "application/json, text/plain, */*",
 }
 
 
@@ -39,10 +36,11 @@ async def _delay(lo: float = 1.0, hi: float = 3.0) -> None:
 
 
 class PlaywrightScraper:
-    """Fetches posts and comments from a subreddit using a headless browser.
+    """Fetches posts and comments from a subreddit via Reddit's JSON API.
 
-    Navigates the real Reddit page and intercepts the internal JSON API
-    calls it makes — no HTML parsing, no API credentials required.
+    Uses a Playwright browser context for user-agent and session management,
+    but calls Reddit's public .json endpoints directly rather than intercepting
+    the browser-rendered page (Reddit's redesign no longer calls top.json).
     Post and comment limits are read from config.json.
     """
 
@@ -67,11 +65,6 @@ class PlaywrightScraper:
                 timezone_id="America/New_York",
                 extra_http_headers=_HEADERS,
             )
-            # Drop ad/tracking requests to reduce noise and detection surface
-            await context.route(
-                "**/{ads,tracking,telemetry,analytics}/**",
-                lambda route, _: route.abort(),
-            )
             try:
                 return await self._scrape(context)
             finally:
@@ -88,7 +81,7 @@ class PlaywrightScraper:
         posts: list[Post] = []
         for raw in raw_posts:
             post_id = raw.get("id", "")
-            await _delay(1.0, 2.5)  # rate limiting between post fetches
+            await _delay(0.5, 1.5)
             comments = await self._fetch_comments(context, post_id)
             posts.append(_build_post(raw, comments))
             log.debug(
@@ -110,50 +103,49 @@ class PlaywrightScraper:
     async def _fetch_listing(
         self, context: BrowserContext
     ) -> list[dict[str, Any]]:
-        """Navigate the subreddit page and intercept JSON listing responses."""
-        collected: list[dict[str, Any]] = []
-        page = await context.new_page()
+        """Fetch posts directly from Reddit's JSON listing API.
 
-        async def handle(route, _request):  # type: ignore[no-untyped-def]
-            response = await route.fetch()
-            try:
-                body = await response.json()
-                children = body.get("data", {}).get("children", [])
-                collected.extend(
-                    c["data"]
-                    for c in children
-                    if c.get("kind") == "t3"
-                    and c.get("data", {}).get("id")
-                )
-            except Exception:
-                pass
-            await route.fulfill(response=response)
-
+        Paginates via the 'after' token until post_limit is reached.
+        """
         subreddit = self._cfg.subreddit
         post_limit = self._cfg.post_limit
+        collected: list[dict[str, Any]] = []
+        after: str | None = None
 
-        await page.route(f"**/{subreddit}/top.json**", handle)
-
-        url = f"{_BASE_URL}/r/{subreddit}/top/?t=day"
-        log.info("Loading %s", url)
-        await page.goto(url, wait_until="domcontentloaded", timeout=30_000)
-        await _delay(1.5, 3.0)
-
-        # Scroll to trigger dynamic loading until we have enough posts
-        max_scrolls = max(5, (post_limit // 25) + 3)
-        for attempt in range(max_scrolls):
-            if len(collected) >= post_limit:
-                break
-            await _scroll_to_bottom(page)
-            await _delay(1.5, 3.0)
-            log.debug(
-                "Scroll %d/%d — %d posts collected",
-                attempt + 1,
-                max_scrolls,
-                len(collected),
+        while len(collected) < post_limit:
+            url = (
+                f"{_BASE_URL}/r/{subreddit}/top.json"
+                f"?t=day&limit=100&raw_json=1"
             )
+            if after:
+                url += f"&after={after}"
 
-        await page.close()
+            log.info("Fetching listing page: %s", url)
+            response = await context.request.get(url)
+
+            if not response.ok:
+                log.warning(
+                    "Listing request failed: HTTP %d for %s",
+                    response.status,
+                    url,
+                )
+                break
+
+            data = await response.json()
+            children = data.get("data", {}).get("children", [])
+            for child in children:
+                if child.get("kind") == "t3":
+                    d = child.get("data", {})
+                    if d.get("id"):
+                        collected.append(d)
+
+            after = data.get("data", {}).get("after")
+            if not after or not children:
+                break
+
+            await _delay(1.0, 2.0)
+
+        log.info("Listing collected %d posts", len(collected))
         return collected[:post_limit]
 
     @retry(
@@ -164,54 +156,49 @@ class PlaywrightScraper:
     async def _fetch_comments(
         self, context: BrowserContext, post_id: str
     ) -> list[Comment]:
-        """Fetch top comments for a post by intercepting its JSON endpoint."""
-        comments: list[Comment] = []
-        page = await context.new_page()
-
-        async def handle(route, _request):  # type: ignore[no-untyped-def]
-            response = await route.fetch()
-            try:
-                body = await response.json()
-                # Reddit returns [post_listing, comment_listing]
-                if isinstance(body, list) and len(body) > 1:
-                    children = body[1].get("data", {}).get("children", [])
-                    for child in children:
-                        if child.get("kind") != "t1":
-                            continue
-                        d = child["data"]
-                        body_text = d.get("body", "")
-                        if body_text in ("", "[deleted]", "[removed]"):
-                            continue
-                        comments.append(Comment(
-                            id=d.get("id", ""),
-                            post_id=post_id,
-                            body=body_text,
-                            author=d.get("author") or "[deleted]",
-                            score=d.get("score", 0),
-                            created_at=datetime.fromtimestamp(
-                                d.get("created_utc", 0), tz=timezone.utc
-                            ),
-                        ))
-            except Exception:
-                pass
-            await route.fulfill(response=response)
-
+        """Fetch top comments for a post via Reddit's JSON API."""
         limit = self._cfg.comment_limit
         url = (
             f"{_BASE_URL}/comments/{post_id}/.json"
-            f"?sort=top&limit={limit}"
+            f"?sort=top&limit={limit}&raw_json=1"
         )
 
+        comments: list[Comment] = []
         try:
-            await page.route("**/.json**", handle)
-            await page.goto(url, wait_until="domcontentloaded", timeout=20_000)
-            await _delay(0.5, 1.5)
+            response = await context.request.get(url)
+            if not response.ok:
+                log.warning(
+                    "Comments request failed for post %s: HTTP %d",
+                    post_id,
+                    response.status,
+                )
+                return comments
+
+            body = await response.json()
+            # Reddit returns [post_listing, comment_listing]
+            if isinstance(body, list) and len(body) > 1:
+                children = body[1].get("data", {}).get("children", [])
+                for child in children:
+                    if child.get("kind") != "t1":
+                        continue
+                    d = child["data"]
+                    body_text = d.get("body", "")
+                    if body_text in ("", "[deleted]", "[removed]"):
+                        continue
+                    comments.append(Comment(
+                        id=d.get("id", ""),
+                        post_id=post_id,
+                        body=body_text,
+                        author=d.get("author") or "[deleted]",
+                        score=d.get("score", 0),
+                        created_at=datetime.fromtimestamp(
+                            d.get("created_utc", 0), tz=UTC
+                        ),
+                    ))
         except Exception as exc:
             log.warning(
                 "Failed to fetch comments for post %s: %s", post_id, exc
             )
-        finally:
-            await page.close()
 
         top = sorted(comments, key=lambda c: c.score, reverse=True)[:limit]
         log.debug("Post %s: %d comments fetched", post_id, len(top))
@@ -222,11 +209,6 @@ class PlaywrightScraper:
 # Helpers
 # ------------------------------------------------------------------ #
 
-async def _scroll_to_bottom(page: Page) -> None:
-    """Scroll to the bottom of the page to trigger dynamic content loading."""
-    await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-
-
 def _build_post(raw: dict[str, Any], comments: list[Comment]) -> Post:
     return Post(
         id=raw.get("id", ""),
@@ -236,7 +218,7 @@ def _build_post(raw: dict[str, Any], comments: list[Comment]) -> Post:
         score=raw.get("score", 0),
         num_comments=raw.get("num_comments", 0),
         created_at=datetime.fromtimestamp(
-            raw.get("created_utc", 0), tz=timezone.utc
+            raw.get("created_utc", 0), tz=UTC
         ),
         url=raw.get("url", ""),
         comments=comments,

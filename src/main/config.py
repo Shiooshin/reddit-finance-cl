@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 from pydantic import BaseModel
@@ -50,8 +51,17 @@ _config: Config | None = None
 
 
 def get_config() -> Config:
-    """Return the singleton Config, loading config.json on first call."""
+    """Return the singleton Config, loading config.json on first call.
+
+    If the DB_PATH environment variable is set, it overrides storage.db_path
+    from config.json. Otherwise the config.json value is used as-is.
+    """
     global _config
     if _config is None:
         _config = Config.load()
+        db_path = os.environ.get("DB_PATH", "").strip()
+        if db_path:
+            _config = _config.model_copy(
+                update={"storage": StorageConfig(db_path=db_path)}
+            )
     return _config
