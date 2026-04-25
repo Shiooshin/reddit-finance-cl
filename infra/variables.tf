@@ -7,6 +7,7 @@ variable "aws_region" {
 variable "s3_data_bucket" {
   description = "Name of the S3 bucket to store insights.duckdb"
   type        = string
+  default     = "reddit-poc-cl-581282195129-us-east-1-an"
 }
 
 variable "ecr_image_uri" {
@@ -23,5 +24,17 @@ variable "tf_state_bucket" {
 variable "schedule_cron" {
   description = "EventBridge Scheduler cron expression (UTC)"
   type        = string
-  default     = "cron(0 6 * * ? *)"  # 06:00 UTC daily
+  default     = "cron(0 6 * * ? *)" # 06:00 UTC daily
+}
+
+variable "github_repo" {
+  description = "GitHub repo in the form <owner>/<name> for OIDC trust"
+  type        = string
+  default     = "Shiooshin/reddit-finance-cl"
+}
+
+variable "github_main_ref" {
+  description = "Git ref allowed to assume the deploy role via OIDC"
+  type        = string
+  default     = "refs/heads/main"
 }
