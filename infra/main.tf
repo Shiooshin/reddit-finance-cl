@@ -93,6 +93,36 @@ resource "aws_s3_bucket_public_access_block" "data" {
   restrict_public_buckets = true
 }
 
+resource "aws_s3_bucket_lifecycle_configuration" "data" {
+  bucket = aws_s3_bucket.data.id
+
+  rule {
+    id     = "expire-old-data-versions"
+    status = "Enabled"
+
+    filter {
+      prefix = "insights.duckdb"
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 30
+    }
+  }
+
+  rule {
+    id     = "expire-old-state-versions"
+    status = "Enabled"
+
+    filter {
+      prefix = "tfstate/"
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 90
+    }
+  }
+}
+
 # ─── SSM Parameter Store (runtime secrets) ───────────────────────────────────
 
 resource "aws_ssm_parameter" "openai_api_key" {
