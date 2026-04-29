@@ -24,6 +24,9 @@ provider "aws" {
   }
 }
 
+data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
+
 # ─── ECR ─────────────────────────────────────────────────────────────────────
 
 resource "aws_ecr_repository" "app" {
@@ -268,11 +271,11 @@ resource "aws_iam_role_policy" "scheduler_ecs" {
       {
         Effect   = "Allow"
         Action   = ["ecs:RunTask"]
-        Resource = aws_ecs_task_definition.pipeline.arn
+        Resource = "arn:aws:ecs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:task-definition/${aws_ecs_task_definition.pipeline.family}:*"
       },
       {
-        Effect   = "Allow"
-        Action   = ["iam:PassRole"]
+        Effect = "Allow"
+        Action = ["iam:PassRole"]
         Resource = [
           aws_iam_role.task_execution.arn,
           aws_iam_role.task_role.arn,
@@ -300,7 +303,7 @@ resource "aws_scheduler_schedule" "daily" {
     role_arn = aws_iam_role.scheduler.arn
 
     ecs_parameters {
-      task_definition_arn = aws_ecs_task_definition.pipeline.arn
+      task_definition_arn = aws_ecs_task_definition.pipeline.arn_without_revision
       launch_type         = "FARGATE"
       task_count          = 1
 
