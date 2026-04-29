@@ -53,3 +53,15 @@ data/*.duckdb
 logs/
 
 features/
+docs/superpowers
+
+# TF
+infra/.terraform/*
+.terraform/*
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+*.tfstate
+*.tfstate.*
+backend.hcl
+!backend.hcl.example

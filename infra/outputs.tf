@@ -22,3 +22,13 @@ output "cloudwatch_log_group" {
   description = "CloudWatch log group for pipeline logs"
   value       = aws_cloudwatch_log_group.pipeline.name
 }
+
+output "github_deploy_role_arn" {
+  description = "ARN of the IAM role assumed by GitHub Actions via OIDC"
+  value       = aws_iam_role.github_deploy.arn
+}
+
+output "ssm_parameter_prefix" {
+  description = "SSM parameter prefix for runtime secrets"
+  value       = "/reddit-finance/"
+}
