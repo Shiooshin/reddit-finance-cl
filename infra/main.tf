@@ -1,17 +1,17 @@
 terraform {
-  required_version = ">= 1.6"
+  required_version = ">= 1.10"
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
   }
-  # Uncomment and configure after creating the state bucket manually:
-  # backend "s3" {
-  #   bucket = "YOUR_TF_STATE_BUCKET"
-  #   key    = "reddit-finance/terraform.tfstate"
-  #   region = "us-east-1"
-  # }
+
+  backend "s3" {
+    use_lockfile = true
+    encrypt      = true
+  }
 }
 
 provider "aws" {
