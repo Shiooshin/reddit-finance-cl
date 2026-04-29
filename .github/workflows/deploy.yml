@@ -1,0 +1,61 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Image tag to build & deploy (defaults to short SHA)"
+        required: false
+        default: ""
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPO: reddit-finance-pipeline
+  TD_FAMILY: reddit-finance-pipeline
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve image tag
+        id: tag
+        run: |
+          TAG="${{ inputs.image_tag }}"
+          [ -z "$TAG" ] && TAG="${GITHUB_SHA::7}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: ecr
+
+      - name: Build & push image
+        env:
+          IMAGE: ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPO }}:${{ steps.tag.outputs.tag }}
+        run: |
+          docker build -t "$IMAGE" .
+          docker push "$IMAGE"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      - name: Register new task-definition revision
+        run: |
+          CURRENT=$(aws ecs describe-task-definition \
+            --task-definition "$TD_FAMILY" \
+            --query 'taskDefinition' --output json)
+
+          NEW=$(echo "$CURRENT" | jq --arg img "$IMAGE" '
+            .containerDefinitions[0].image = $img
+            | del(.taskDefinitionArn, .revision, .status, .requiresAttributes,
+                  .compatibilities, .registeredAt, .registeredBy)
+          ')
+
+          aws ecs register-task-definition --cli-input-json "$NEW" > /dev/null
