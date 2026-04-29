@@ -10,8 +10,9 @@ variable "s3_data_bucket" {
 }
 
 variable "ecr_image_uri" {
-  description = "Full ECR image URI including tag (e.g. 123456.dkr.ecr.us-east-1.amazonaws.com/reddit-finance-pipeline:latest)"
+  description = "Full ECR image URI including tag. Defaults to a public placeholder so the first apply succeeds before any image has been pushed; the deploy workflow registers real revisions."
   type        = string
+  default     = "public.ecr.aws/docker/library/hello-world:latest"
 }
 
 variable "tf_state_bucket" {
@@ -23,5 +24,10 @@ variable "tf_state_bucket" {
 variable "schedule_cron" {
   description = "EventBridge Scheduler cron expression (UTC)"
   type        = string
-  default     = "cron(0 6 * * ? *)"  # 06:00 UTC daily
+  default     = "cron(0 6 * * ? *)" # 06:00 UTC daily
+}
+
+variable "github_repo" {
+  description = "GitHub repository in 'owner/repo' form (used in OIDC trust policy)"
+  type        = string
 }
