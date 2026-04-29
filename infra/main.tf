@@ -239,6 +239,10 @@ resource "aws_ecs_task_definition" "pipeline" {
 
     # No port mappings needed — this is a batch job, no inbound connections
   }])
+
+  lifecycle {
+    ignore_changes = [container_definitions]
+  }
 }
 
 # ─── IAM: EventBridge Scheduler Role ─────────────────────────────────────────
