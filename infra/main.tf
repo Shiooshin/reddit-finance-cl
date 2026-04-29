@@ -1,12 +1,17 @@
 terraform {
-  required_version = ">= 1.6"
+  required_version = ">= 1.10"
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
   }
-  backend "s3" {}
+
+  backend "s3" {
+    use_lockfile = true
+    encrypt      = true
+  }
 }
 
 provider "aws" {
@@ -19,17 +24,8 @@ provider "aws" {
   }
 }
 
-# ─── Lookups & locals ────────────────────────────────────────────────────────
-
 data "aws_caller_identity" "current" {}
-
-data "aws_kms_alias" "ssm" {
-  name = "alias/aws/ssm"
-}
-
-locals {
-  task_definition_family_arn = "arn:aws:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:task-definition/${aws_ecs_task_definition.pipeline.family}"
-}
+data "aws_region" "current" {}
 
 # ─── ECR ─────────────────────────────────────────────────────────────────────
 
@@ -149,6 +145,18 @@ resource "aws_cloudwatch_log_group" "pipeline" {
   retention_in_days = 30
 }
 
+# ─── SSM Parameter (OpenAI API key) ──────────────────────────────────────────
+
+resource "aws_ssm_parameter" "openai_api_key" {
+  name  = "/reddit-finance/openai_api_key"
+  type  = "SecureString"
+  value = "PLACEHOLDER"
+
+  lifecycle {
+    ignore_changes = [value]
+  }
+}
+
 # ─── IAM: Task Execution Role (ECS control plane) ────────────────────────────
 
 resource "aws_iam_role" "task_execution" {
@@ -173,18 +181,12 @@ resource "aws_iam_role_policy" "task_execution_ssm" {
   role = aws_iam_role.task_execution.id
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [
-      {
-        Effect   = "Allow"
-        Action   = ["ssm:GetParameters"]
-        Resource = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/reddit-finance/*"
-      },
-      {
-        Effect   = "Allow"
-        Action   = ["kms:Decrypt"]
-        Resource = data.aws_kms_alias.ssm.target_key_arn
-      },
-    ]
+
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["ssm:GetParameters"]
+      Resource = aws_ssm_parameter.openai_api_key.arn
+    }]
   })
 }
 
@@ -270,7 +272,8 @@ resource "aws_ecs_task_definition" "pipeline" {
     ]
 
     secrets = [
-      { name = "OPENAI_API_KEY", valueFrom = aws_ssm_parameter.openai_api_key.arn },
+
+      { name = "OPENAI_API_KEY", valueFrom = aws_ssm_parameter.openai_api_key.arn }
     ]
 
     logConfiguration = {
@@ -284,6 +287,10 @@ resource "aws_ecs_task_definition" "pipeline" {
 
     # No port mappings needed — this is a batch job, no inbound connections
   }])
+
+  lifecycle {
+    ignore_changes = [container_definitions]
+  }
 }
 
 # ─── GitHub OIDC: Deploy Role ────────────────────────────────────────────────
@@ -387,7 +394,8 @@ resource "aws_iam_role_policy" "scheduler_ecs" {
       {
         Effect   = "Allow"
         Action   = ["ecs:RunTask"]
-        Resource = "${local.task_definition_family_arn}:*"
+
+        Resource = "arn:aws:ecs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:task-definition/${aws_ecs_task_definition.pipeline.family}:*"
       },
       {
         Effect = "Allow"
@@ -419,7 +427,7 @@ resource "aws_scheduler_schedule" "daily" {
     role_arn = aws_iam_role.scheduler.arn
 
     ecs_parameters {
-      task_definition_arn = local.task_definition_family_arn
+      task_definition_arn = aws_ecs_task_definition.pipeline.arn_without_revision
       launch_type         = "FARGATE"
       task_count          = 1
 
@@ -439,4 +447,73 @@ resource "aws_scheduler_schedule" "daily" {
   lifecycle {
     ignore_changes = [target[0].ecs_parameters[0].task_definition_arn]
   }
+}
+
+# ─── GitHub OIDC + deploy role ───────────────────────────────────────────────
+
+resource "aws_iam_openid_connect_provider" "github" {
+  url             = "https://token.actions.githubusercontent.com"
+  client_id_list  = ["sts.amazonaws.com"]
+  thumbprint_list = ["6938fd4d98bab03faadb97b34396831e3780aea1"]
+}
+
+resource "aws_iam_role" "github_deploy" {
+  name = "reddit-finance-github-deploy"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Action    = "sts:AssumeRoleWithWebIdentity"
+      Principal = { Federated = aws_iam_openid_connect_provider.github.arn }
+      Condition = {
+        StringEquals = {
+          "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+        }
+        StringLike = {
+          "token.actions.githubusercontent.com:sub" = "repo:${var.github_repo}:*"
+        }
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "github_deploy" {
+  name = "deploy-permissions"
+  role = aws_iam_role.github_deploy.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["ecr:GetAuthorizationToken"]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:CompleteLayerUpload",
+          "ecr:InitiateLayerUpload",
+          "ecr:PutImage",
+          "ecr:UploadLayerPart",
+          "ecr:BatchGetImage",
+          "ecr:DescribeRepositories",
+        ]
+        Resource = aws_ecr_repository.app.arn
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["ecs:RegisterTaskDefinition", "ecs:DescribeTaskDefinition"]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = ["iam:PassRole"]
+        Resource = [
+          aws_iam_role.task_execution.arn,
+          aws_iam_role.task_role.arn,
+        ]
+      },
+    ]
+  })
 }

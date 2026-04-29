@@ -53,25 +53,23 @@ _config: Config | None = None
 def get_config() -> Config:
     """Return the singleton Config, loading config.json on first call.
 
-    Environment variables override config.json values when present:
-      DB_PATH         -> storage.db_path
-      OPENAI_API_KEY  -> openai.api_key (only when config value is empty)
+    Environment variable overrides applied after load:
+      - DB_PATH        overrides storage.db_path
+      - OPENAI_API_KEY overrides openai.api_key
     """
     global _config
     if _config is None:
-        _config = Config.load()
+        _config = Config.load(_CONFIG_PATH)
+
         db_path = os.environ.get("DB_PATH", "").strip()
         if db_path:
             _config = _config.model_copy(
                 update={"storage": StorageConfig(db_path=db_path)}
             )
-        openai_api_key = os.environ.get("OPENAI_API_KEY", "").strip()
-        if openai_api_key and not _config.openai.api_key:
-            _config = _config.model_copy(
-                update={
-                    "openai": _config.openai.model_copy(
-                        update={"api_key": openai_api_key}
-                    )
-                }
-            )
+
+        api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+        if api_key:
+            new_openai = _config.openai.model_copy(update={"api_key": api_key})
+            _config = _config.model_copy(update={"openai": new_openai})
+
     return _config

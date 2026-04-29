@@ -24,11 +24,11 @@ output "cloudwatch_log_group" {
 }
 
 output "github_deploy_role_arn" {
-  description = "ARN of the IAM role assumed by GitHub Actions via OIDC"
+  description = "ARN of the IAM role assumed by the Deploy GitHub workflow via OIDC"
   value       = aws_iam_role.github_deploy.arn
 }
 
-output "ssm_parameter_prefix" {
-  description = "SSM parameter prefix for runtime secrets"
-  value       = "/reddit-finance/"
+output "ssm_openai_key_arn" {
+  description = "ARN of the SSM SecureString parameter holding the OpenAI API key"
+  value       = aws_ssm_parameter.openai_api_key.arn
 }

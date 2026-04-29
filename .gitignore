@@ -43,9 +43,6 @@ htmlcov/
 .DS_Store
 Thumbs.db
 
-# Project secrets
-config.json
-
 # Data files
 data/*.duckdb
 
@@ -55,13 +52,9 @@ logs/
 features/
 docs/superpowers
 
-# TF
-infra/.terraform/*
-.terraform/*
-*.tfvars
-*.tfvars.json
-!*.tfvars.example
+# Terraform
+infra/terraform.tfvars
+infra/.terraform/
 *.tfstate
-*.tfstate.*
-backend.hcl
-!backend.hcl.example
+*.tfstate.backup
+

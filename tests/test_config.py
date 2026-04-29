@@ -1,5 +1,4 @@
-"""Tests for get_config() env-var overrides."""
-
+"""Tests for config.get_config() env-var overrides."""
 from __future__ import annotations
 
 import json
@@ -7,69 +6,70 @@ from pathlib import Path
 
 import pytest
 
-import main.config as config_module
+from main import config as config_module
 
 
-def _write_config(
-    tmp_path: Path,
-    *,
-    openai_api_key: str,
-) -> None:
-    """Write a minimal valid config.json into tmp_path."""
-    payload = {
+@pytest.fixture(autouse=True)
+def _reset_config_singleton(monkeypatch: pytest.MonkeyPatch) -> None:
+    """get_config() caches in a module global; clear it between tests."""
+    monkeypatch.setattr(config_module, "_config", None)
+
+
+@pytest.fixture
+def config_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Write a minimal config.json the loader can read, and point to it."""
+    cfg = {
         "reddit": {
             "subreddit": "finance_ukr",
             "post_limit": 1,
             "comment_limit": 1,
+            "client_id": "",
+            "client_secret": "",
+            "user_agent": "",
         },
         "openai": {
-            "api_key": openai_api_key,
+            "api_key": "FROM_FILE",
             "model": "gpt-4o",
-            "max_tokens": 100,
+            "max_tokens": 16,
         },
-        "storage": {"db_path": "/tmp/insights.duckdb"},
+        "storage": {"db_path": "data/insights.duckdb"},
         "logging": {"level": "INFO"},
     }
-    (tmp_path / "config.json").write_text(json.dumps(payload))
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps(cfg))
+    monkeypatch.setattr(config_module, "_CONFIG_PATH", path)
+    return path
 
 
-@pytest.fixture(autouse=True)
-def _reset_singleton() -> None:
-    """get_config() caches the loaded Config — reset before each test."""
-    config_module._config = None
-
-
-def test_openai_api_key_falls_back_to_env_when_config_value_empty(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+def test_openai_api_key_env_override_replaces_file_value(
+    config_file: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _write_config(tmp_path, openai_api_key="")
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("OPENAI_API_KEY", "sk-from-env")
-
+    monkeypatch.setenv("OPENAI_API_KEY", "FROM_ENV")
     cfg = config_module.get_config()
+    assert cfg.openai.api_key == "FROM_ENV"
 
-    assert cfg.openai.api_key == "sk-from-env"
 
-
-def test_config_value_takes_precedence_over_env(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+def test_openai_api_key_unset_falls_back_to_file(
+    config_file: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _write_config(tmp_path, openai_api_key="sk-from-config")
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("OPENAI_API_KEY", "sk-from-env")
-
-    cfg = config_module.get_config()
-
-    assert cfg.openai.api_key == "sk-from-config"
-
-
-def test_api_key_stays_empty_when_neither_set(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    _write_config(tmp_path, openai_api_key="")
-    monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-
     cfg = config_module.get_config()
+    assert cfg.openai.api_key == "FROM_FILE"
 
-    assert cfg.openai.api_key == ""
+
+def test_openai_api_key_empty_env_falls_back_to_file(
+    config_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "   ")
+    cfg = config_module.get_config()
+    assert cfg.openai.api_key == "FROM_FILE"
+
+
+def test_openai_and_db_path_overrides_coexist(
+    config_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "FROM_ENV")
+    monkeypatch.setenv("DB_PATH", "/tmp/override.duckdb")
+    cfg = config_module.get_config()
+    assert cfg.openai.api_key == "FROM_ENV"
+    assert cfg.storage.db_path == "/tmp/override.duckdb"
