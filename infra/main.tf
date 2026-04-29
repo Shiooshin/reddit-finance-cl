@@ -84,6 +84,49 @@ resource "aws_s3_bucket_public_access_block" "data" {
   restrict_public_buckets = true
 }
 
+resource "aws_s3_bucket_lifecycle_configuration" "data" {
+  bucket = aws_s3_bucket.data.id
+
+  rule {
+    id     = "expire-old-data-versions"
+    status = "Enabled"
+
+    filter {
+      prefix = "insights.duckdb"
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 30
+    }
+  }
+
+  rule {
+    id     = "expire-old-state-versions"
+    status = "Enabled"
+
+    filter {
+      prefix = "tfstate/"
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 90
+    }
+  }
+}
+
+# ─── SSM Parameter Store (runtime secrets) ───────────────────────────────────
+
+resource "aws_ssm_parameter" "openai_api_key" {
+  name        = "/reddit-finance/openai_api_key"
+  description = "OpenAI API key consumed by the pipeline container at task start"
+  type        = "SecureString"
+  value       = "REPLACE_ME"
+
+  lifecycle {
+    ignore_changes = [value]
+  }
+}
+
 # ─── ECS Cluster ─────────────────────────────────────────────────────────────
 
 resource "aws_ecs_cluster" "main" {
@@ -138,6 +181,7 @@ resource "aws_iam_role_policy" "task_execution_ssm" {
   role = aws_iam_role.task_execution.id
   policy = jsonencode({
     Version = "2012-10-17"
+
     Statement = [{
       Effect   = "Allow"
       Action   = ["ssm:GetParameters"]
@@ -228,6 +272,7 @@ resource "aws_ecs_task_definition" "pipeline" {
     ]
 
     secrets = [
+
       { name = "OPENAI_API_KEY", valueFrom = aws_ssm_parameter.openai_api_key.arn }
     ]
 
@@ -246,6 +291,84 @@ resource "aws_ecs_task_definition" "pipeline" {
   lifecycle {
     ignore_changes = [container_definitions]
   }
+}
+
+# ─── GitHub OIDC: Deploy Role ────────────────────────────────────────────────
+
+resource "aws_iam_openid_connect_provider" "github" {
+  url            = "https://token.actions.githubusercontent.com"
+  client_id_list = ["sts.amazonaws.com"]
+  thumbprint_list = [
+    # GitHub's published thumbprints (both kept for rotation tolerance)
+    "6938fd4d98bab03faadb97b34396831e3780aea1",
+    "1c58a3a8518e8759bf075b76b750d4f2df264fcd",
+  ]
+}
+
+resource "aws_iam_role" "github_deploy" {
+  name = "reddit-finance-github-deploy"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Federated = aws_iam_openid_connect_provider.github.arn
+      }
+      Action = "sts:AssumeRoleWithWebIdentity"
+      Condition = {
+        StringEquals = {
+          "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+        }
+        StringLike = {
+          "token.actions.githubusercontent.com:sub" = "repo:${var.github_repo}:ref:${var.github_main_ref}"
+        }
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "github_deploy" {
+  name = "ecr-push-and-ecs-register"
+  role = aws_iam_role.github_deploy.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["ecr:GetAuthorizationToken"]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:InitiateLayerUpload",
+          "ecr:UploadLayerPart",
+          "ecr:CompleteLayerUpload",
+          "ecr:PutImage",
+          "ecr:DescribeImages",
+          "ecr:BatchGetImage",
+        ]
+        Resource = aws_ecr_repository.app.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ecs:RegisterTaskDefinition",
+          "ecs:DescribeTaskDefinition",
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = ["iam:PassRole"]
+        Resource = [
+          aws_iam_role.task_execution.arn,
+          aws_iam_role.task_role.arn,
+        ]
+      },
+    ]
+  })
 }
 
 # ─── IAM: EventBridge Scheduler Role ─────────────────────────────────────────
@@ -271,6 +394,7 @@ resource "aws_iam_role_policy" "scheduler_ecs" {
       {
         Effect   = "Allow"
         Action   = ["ecs:RunTask"]
+
         Resource = "arn:aws:ecs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:task-definition/${aws_ecs_task_definition.pipeline.family}:*"
       },
       {
@@ -318,6 +442,10 @@ resource "aws_scheduler_schedule" "daily" {
       maximum_retry_attempts       = 2
       maximum_event_age_in_seconds = 3600 # Don't retry if event is >1 hour old
     }
+  }
+
+  lifecycle {
+    ignore_changes = [target[0].ecs_parameters[0].task_definition_arn]
   }
 }
 

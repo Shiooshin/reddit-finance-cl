@@ -1,0 +1,8 @@
+# Copy this file to backend.hcl and fill in real values.
+# backend.hcl is gitignored.
+#
+# Used with: terraform init -backend-config=backend.hcl
+
+bucket = "reddit-poc-<account-id>-<region>-<suffix>"
+key    = "reddit-finance/terraform.tfstate"
+region = "us-east-1"
