@@ -130,6 +130,19 @@ resource "aws_iam_role_policy_attachment" "task_execution_managed" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+resource "aws_iam_role_policy" "task_execution_ssm" {
+  name = "ssm-secrets-access"
+  role = aws_iam_role.task_execution.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["ssm:GetParameters"]
+      Resource = aws_ssm_parameter.openai_api_key.arn
+    }]
+  })
+}
+
 # ─── IAM: Task Role (runtime permissions for the app) ────────────────────────
 
 resource "aws_iam_role" "task_role" {
@@ -209,6 +222,10 @@ resource "aws_ecs_task_definition" "pipeline" {
       { name = "S3_BUCKET", value = var.s3_data_bucket },
       # DB path inside the container (must match config.json storage.db_path)
       { name = "DB_PATH", value = "/app/data/insights.duckdb" },
+    ]
+
+    secrets = [
+      { name = "OPENAI_API_KEY", valueFrom = aws_ssm_parameter.openai_api_key.arn }
     ]
 
     logConfiguration = {
