@@ -22,3 +22,13 @@ output "cloudwatch_log_group" {
   description = "CloudWatch log group for pipeline logs"
   value       = aws_cloudwatch_log_group.pipeline.name
 }
+
+output "github_deploy_role_arn" {
+  description = "ARN of the IAM role assumed by the Deploy GitHub workflow via OIDC"
+  value       = aws_iam_role.github_deploy.arn
+}
+
+output "ssm_openai_key_arn" {
+  description = "ARN of the SSM SecureString parameter holding the OpenAI API key"
+  value       = aws_ssm_parameter.openai_api_key.arn
+}
