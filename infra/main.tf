@@ -99,6 +99,18 @@ resource "aws_cloudwatch_log_group" "pipeline" {
   retention_in_days = 30
 }
 
+# ─── SSM Parameter (OpenAI API key) ──────────────────────────────────────────
+
+resource "aws_ssm_parameter" "openai_api_key" {
+  name  = "/reddit-finance/openai_api_key"
+  type  = "SecureString"
+  value = "PLACEHOLDER"
+
+  lifecycle {
+    ignore_changes = [value]
+  }
+}
+
 # ─── IAM: Task Execution Role (ECS control plane) ────────────────────────────
 
 resource "aws_iam_role" "task_execution" {
