@@ -129,3 +129,63 @@ def test_render_includes_one_table_row_per_pair(
             assert f"Title{i}" in html
         subject = client.send_email.call_args.kwargs["Message"]["Subject"]["Data"]
         assert "3 new" in subject
+
+
+@pytest.fixture
+def fast_retry() -> object:
+    """Replace the @retry decorator's wait policy with no-wait so retry tests run fast.
+
+    The wait policy is captured at decoration time, so patching
+    `main.email_notifier.wait_exponential` after import has no effect.
+    Mutating `_send.retry.wait` on the wrapped method does work.
+    """
+    from tenacity import wait_none
+
+    from main.email_notifier import EmailNotifier
+
+    original = EmailNotifier._send.retry.wait
+    EmailNotifier._send.retry.wait = wait_none()
+    yield
+    EmailNotifier._send.retry.wait = original
+
+
+def test_retries_on_ses_throttle_and_succeeds(
+    patched_config: MagicMock, fast_retry: None
+) -> None:
+    """First two SES calls raise ClientError(Throttling); third succeeds."""
+    from botocore.exceptions import ClientError
+
+    from main.email_notifier import EmailNotifier
+
+    throttle = ClientError(
+        {"Error": {"Code": "Throttling", "Message": "rate exceeded"}},
+        "SendEmail",
+    )
+    with patch("main.email_notifier.boto3.client") as boto:
+        client = boto.return_value
+        client.send_email.side_effect = [throttle, throttle, {"MessageId": "ok"}]
+
+        EmailNotifier().send_digest([(_post(), _result())])
+
+        assert client.send_email.call_count == 3
+
+
+def test_retries_exhausted_propagates_client_error(
+    patched_config: MagicMock, fast_retry: None
+) -> None:
+    from botocore.exceptions import ClientError
+
+    from main.email_notifier import EmailNotifier
+
+    throttle = ClientError(
+        {"Error": {"Code": "Throttling", "Message": "rate exceeded"}},
+        "SendEmail",
+    )
+    with patch("main.email_notifier.boto3.client") as boto:
+        client = boto.return_value
+        client.send_email.side_effect = throttle
+
+        with pytest.raises(ClientError):
+            EmailNotifier().send_digest([(_post(), _result())])
+
+        assert client.send_email.call_count == 3
