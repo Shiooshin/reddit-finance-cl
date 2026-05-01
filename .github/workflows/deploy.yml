@@ -47,13 +47,21 @@ jobs:
           echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
 
       - name: Register new task-definition revision
+        env:
+          EMAIL_RECIPIENTS: ${{ vars.EMAIL_RECIPIENTS }}
         run: |
           CURRENT=$(aws ecs describe-task-definition \
             --task-definition "$TD_FAMILY" \
             --query 'taskDefinition' --output json)
 
-          NEW=$(echo "$CURRENT" | jq --arg img "$IMAGE" '
+          NEW=$(echo "$CURRENT" | jq \
+            --arg img "$IMAGE" \
+            --arg recipients "$EMAIL_RECIPIENTS" '
             .containerDefinitions[0].image = $img
+            | .containerDefinitions[0].environment |= (
+                map(select(.name != "EMAIL_RECIPIENTS"))
+                + [{name: "EMAIL_RECIPIENTS", value: $recipients}]
+              )
             | del(.taskDefinitionArn, .revision, .status, .requiresAttributes,
                   .compatibilities, .registeredAt, .registeredBy)
           ')

@@ -3,3 +3,11 @@
 
 # S3 bucket that stores insights.duckdb. Must already exist.
 s3_data_bucket = "reddit-poc-<account-id>-<region>-<suffix>"
+
+# Email digest delivery
+# Verified SES sender. Default value below is the project mailbox.
+email_from_address = "reddit.finance.poc@gmail.com"
+# Comma-separated recipients (e.g. "alice@x.com,bob@x.com").
+# Empty initial value; per-deploy refresh comes from the GitHub Actions
+# repository variable EMAIL_RECIPIENTS.
+email_recipients = ""

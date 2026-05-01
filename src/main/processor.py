@@ -22,9 +22,15 @@ _DELETED_MARKERS = {"[deleted]", "[removed]"}
 class Processor:
     """Cleans post and comment text to produce LLM-ready input."""
 
-    def process(self, posts: list[Post], analyzer: Analyzer) -> list[AnalysisResult]:
-        """Clean each post and run LLM analysis. Returns one result per post."""
-        results = []
+    def process(
+        self, posts: list[Post], analyzer: Analyzer
+    ) -> list[tuple[Post, AnalysisResult]]:
+        """Clean each post, run LLM analysis, return (original_post, result) pairs.
+
+        The original (un-cleaned) post is paired with the result so downstream
+        consumers (e.g. EmailNotifier) keep the un-truncated title and original URL.
+        """
+        pairs: list[tuple[Post, AnalysisResult]] = []
         for post in posts:
             cleaned = self.clean_post(post)
             result = analyzer.analyze(cleaned)
@@ -34,8 +40,8 @@ class Processor:
                 result.sentiment,
                 result.confidence_score,
             )
-            results.append(result)
-        return results
+            pairs.append((post, result))
+        return pairs
 
     def clean_post(self, post: Post) -> Post:
         """Return a copy of the post with cleaned title, body, and comments.

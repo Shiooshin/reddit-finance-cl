@@ -17,5 +17,11 @@
   },
   "logging": {
     "level": "INFO"
+  },
+  "email": {
+    "recipients": [],
+    "from_address": "insight@example.com",
+    "aws_region": "us-east-1",
+    "subject_prefix": "[Reddit Insight]"
   }
 }
