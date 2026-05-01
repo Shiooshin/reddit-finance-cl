@@ -73,3 +73,59 @@ def test_send_digest_skips_when_no_recipients(
         notifier = EmailNotifier()
         notifier.send_digest([(_post(), _result())])
         client.send_email.assert_not_called()
+
+
+def test_send_digest_calls_ses_with_multipart_body(
+    patched_config: MagicMock,
+) -> None:
+    from main.email_notifier import EmailNotifier
+
+    with patch("main.email_notifier.boto3.client") as boto:
+        client = boto.return_value
+        notifier = EmailNotifier()
+        notifier.send_digest([(_post("p1", "Hello"), _result("p1"))])
+
+        client.send_email.assert_called_once()
+        kwargs = client.send_email.call_args.kwargs
+        assert kwargs["Source"] == "sender@example.com"
+        assert kwargs["Destination"] == {"ToAddresses": ["dest@example.com"]}
+        body = kwargs["Message"]["Body"]
+        assert "Html" in body and "Text" in body
+        assert "Hello" in body["Html"]["Data"]
+        assert "Hello" in body["Text"]["Data"]
+        subject = kwargs["Message"]["Subject"]["Data"]
+        assert subject.startswith("[Reddit Insight] 1 new — r/finance_ukr — ")
+
+
+def test_render_escapes_html_in_post_title(patched_config: MagicMock) -> None:
+    """HTML template autoescapes; plaintext template does not need to."""
+    from main.email_notifier import EmailNotifier
+
+    with patch("main.email_notifier.boto3.client") as boto:
+        client = boto.return_value
+        evil_title = "<script>alert(1)</script>"
+        notifier = EmailNotifier()
+        notifier.send_digest([(_post("p1", evil_title), _result("p1"))])
+
+        body = client.send_email.call_args.kwargs["Message"]["Body"]
+        assert "<script>alert(1)</script>" not in body["Html"]["Data"]
+        assert "&lt;script&gt;alert(1)&lt;/script&gt;" in body["Html"]["Data"]
+        assert "<script>alert(1)</script>" in body["Text"]["Data"]
+
+
+def test_render_includes_one_table_row_per_pair(
+    patched_config: MagicMock,
+) -> None:
+    from main.email_notifier import EmailNotifier
+
+    pairs = [(_post(f"p{i}", f"Title{i}"), _result(f"p{i}")) for i in range(3)]
+    with patch("main.email_notifier.boto3.client") as boto:
+        client = boto.return_value
+        EmailNotifier().send_digest(pairs)
+
+        html = client.send_email.call_args.kwargs["Message"]["Body"]["Html"]["Data"]
+        for i in range(3):
+            assert f"https://reddit.com/p{i}" in html
+            assert f"Title{i}" in html
+        subject = client.send_email.call_args.kwargs["Message"]["Subject"]["Data"]
+        assert "3 new" in subject

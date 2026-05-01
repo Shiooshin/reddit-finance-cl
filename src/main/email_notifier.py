@@ -41,7 +41,10 @@ class EmailNotifier:
         self._client = boto3.client("ses", region_name=cfg.email.aws_region)
         self._env = Environment(
             loader=PackageLoader("main", "templates"),
-            autoescape=select_autoescape(["html"]),
+            autoescape=select_autoescape(
+                enabled_extensions=("html", "html.j2"),
+                disabled_extensions=("txt", "txt.j2"),
+            ),
             trim_blocks=True,
             lstrip_blocks=True,
         )
@@ -54,7 +57,21 @@ class EmailNotifier:
                 len(self._recipients),
             )
             return
-        raise NotImplementedError("render+send wired in Task 7")
+
+        ctx = {
+            "pairs": pairs,
+            "subreddit": self._subreddit,
+            "date": date.today().isoformat(),
+            "sentiment_colors": _SENTIMENT_COLORS,
+        }
+        html = self._env.get_template("digest.html.j2").render(**ctx)
+        text = self._env.get_template("digest.txt.j2").render(**ctx)
+        subject = (
+            f"{self._subject_prefix} {len(pairs)} new — "
+            f"r/{self._subreddit} — {ctx['date']}"
+        )
+        self._send(subject, html, text)
+        log.info("Digest email sent to %d recipients", len(self._recipients))
 
     @retry(
         stop=stop_after_attempt(3),
