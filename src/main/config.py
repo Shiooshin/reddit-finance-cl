@@ -35,11 +35,19 @@ class LoggingConfig(BaseModel):
     level: str
 
 
+class EmailConfig(BaseModel):
+    recipients: list[str] = []
+    from_address: str
+    aws_region: str
+    subject_prefix: str = "[Reddit Insight]"
+
+
 class Config(BaseModel):
     reddit: RedditConfig
     openai: OpenAIConfig
     storage: StorageConfig
     logging: LoggingConfig
+    email: EmailConfig
 
     @classmethod
     def load(cls, path: Path = _CONFIG_PATH) -> Config:
@@ -54,8 +62,9 @@ def get_config() -> Config:
     """Return the singleton Config, loading config.json on first call.
 
     Environment variable overrides applied after load:
-      - DB_PATH        overrides storage.db_path
-      - OPENAI_API_KEY overrides openai.api_key
+      - DB_PATH           overrides storage.db_path
+      - OPENAI_API_KEY    overrides openai.api_key
+      - EMAIL_RECIPIENTS  overrides email.recipients (comma-separated)
     """
     global _config
     if _config is None:
@@ -71,5 +80,13 @@ def get_config() -> Config:
         if api_key:
             new_openai = _config.openai.model_copy(update={"api_key": api_key})
             _config = _config.model_copy(update={"openai": new_openai})
+
+        recipients_env = os.environ.get("EMAIL_RECIPIENTS", "").strip()
+        if recipients_env:
+            recipients = [
+                r.strip() for r in recipients_env.split(",") if r.strip()
+            ]
+            new_email = _config.email.model_copy(update={"recipients": recipients})
+            _config = _config.model_copy(update={"email": new_email})
 
     return _config
