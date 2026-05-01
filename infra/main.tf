@@ -448,7 +448,7 @@ resource "aws_scheduler_schedule" "daily" {
   }
 
   schedule_expression          = var.schedule_cron
-  schedule_expression_timezone = "UTC"
+  schedule_expression_timezone = "Europe/Kyiv"
 
   target {
     arn      = aws_ecs_cluster.main.arn
