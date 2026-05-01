@@ -38,7 +38,9 @@ class EmailNotifier:
         self._from = cfg.email.from_address
         self._subject_prefix = cfg.email.subject_prefix
         self._subreddit = cfg.reddit.subreddit
-        self._client = boto3.client("ses", region_name=cfg.email.aws_region)
+        self._client = boto3.client(  # type: ignore[no-untyped-call]
+            "ses", region_name=cfg.email.aws_region
+        )
         self._env = Environment(
             loader=PackageLoader("main", "templates"),
             autoescape=select_autoescape(

@@ -47,3 +47,8 @@ select = ["E", "F", "I", "UP"]
 [tool.mypy]
 python_version = "3.12"
 strict = true
+
+[[tool.mypy.overrides]]
+module = ["boto3", "boto3.*", "botocore", "botocore.*"]
+ignore_missing_imports = true
+follow_untyped_imports = true

@@ -1,9 +1,10 @@
-"""Pipeline — orchestrates the full scrape → store → analyze flow."""
+"""Pipeline — orchestrates the full scrape → store → analyze → notify flow."""
 
 from __future__ import annotations
 
 from main.analyzer import Analyzer
 from main.duckdb_writer import DuckDBWriter
+from main.email_notifier import EmailNotifier
 from main.logger import get_logger
 from main.processor import Processor
 from main.scraper_playwright import PlaywrightScraper
@@ -19,9 +20,10 @@ class Pipeline:
         self.processor = Processor()
         self.analyzer = Analyzer()
         self.writer: DuckDBWriter = DuckDBWriter()
+        self.notifier = EmailNotifier()
 
     def run(self) -> None:
-        """Execute the full pipeline: scrape → deduplicate → store → analyze."""
+        """Execute the full pipeline: scrape → dedupe → store → analyze → notify."""
         log.info("Pipeline started")
 
         log.info("Step 1/3 — scraping posts")
@@ -47,8 +49,13 @@ class Pipeline:
         self.writer.write_raw_posts(new_posts)
 
         log.info("Step 3/3 — processing and analyzing posts")
-        results = self.processor.process(new_posts, self.analyzer)
-
+        pairs = self.processor.process(new_posts, self.analyzer)
+        results = [r for _, r in pairs]
         self.writer.write_analytical_results(results)
 
-        log.info("Pipeline complete — %d posts analyzed", len(results))
+        try:
+            self.notifier.send_digest(pairs)
+        except Exception:
+            log.exception("Email notification failed; pipeline continues")
+
+        log.info("Pipeline complete — %d posts analyzed", len(pairs))
