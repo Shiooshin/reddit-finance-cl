@@ -31,3 +31,15 @@ variable "github_repo" {
   description = "GitHub repository in 'owner/repo' form (used in OIDC trust policy)"
   type        = string
 }
+
+variable "email_from_address" {
+  description = "Verified SES sender address (must be verified in the chosen region). Empty disables SES resources."
+  type        = string
+  default     = "reddit.finance.poc@gmail.com"
+}
+
+variable "email_recipients" {
+  description = "Comma-separated digest recipients (initial value; overridden per-deploy by GitHub Actions variable EMAIL_RECIPIENTS)"
+  type        = string
+  default     = ""
+}

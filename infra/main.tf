@@ -221,6 +221,31 @@ resource "aws_iam_role_policy" "task_s3" {
   })
 }
 
+# ─── SES identity + send permission for the ECS task role ───────────────────
+
+resource "aws_ses_email_identity" "sender" {
+  count = var.email_from_address == "" ? 0 : 1
+  email = var.email_from_address
+}
+
+data "aws_iam_policy_document" "ses_send" {
+  count = var.email_from_address == "" ? 0 : 1
+  statement {
+    actions = [
+      "ses:SendEmail",
+      "ses:SendRawEmail",
+    ]
+    resources = [aws_ses_email_identity.sender[0].arn]
+  }
+}
+
+resource "aws_iam_role_policy" "ecs_task_ses" {
+  count  = var.email_from_address == "" ? 0 : 1
+  name   = "ses-send"
+  role   = aws_iam_role.task_role.id
+  policy = data.aws_iam_policy_document.ses_send[0].json
+}
+
 # ─── Networking (default VPC) ────────────────────────────────────────────────
 
 data "aws_vpc" "default" {
@@ -269,6 +294,9 @@ resource "aws_ecs_task_definition" "pipeline" {
       { name = "S3_BUCKET", value = var.s3_data_bucket },
       # DB path inside the container (must match config.json storage.db_path)
       { name = "DB_PATH", value = "/app/data/insights.duckdb" },
+      # Comma-separated digest recipients; deploy.yml refreshes this from
+      # vars.EMAIL_RECIPIENTS on each task-def register
+      { name = "EMAIL_RECIPIENTS", value = var.email_recipients },
     ]
 
     secrets = [
@@ -392,8 +420,8 @@ resource "aws_iam_role_policy" "scheduler_ecs" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect   = "Allow"
-        Action   = ["ecs:RunTask"]
+        Effect = "Allow"
+        Action = ["ecs:RunTask"]
 
         Resource = "arn:aws:ecs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:task-definition/${aws_ecs_task_definition.pipeline.family}:*"
       },
