@@ -13,9 +13,7 @@ tests/
 features/
 infra/
 scripts/
-poetry.lock
 poetry.toml
-pyproject.toml
 README.md
 CLAUDE.md
 Makefile
