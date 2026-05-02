@@ -43,6 +43,8 @@ jobs:
       TASK_FAMILY: reddit-finance-pipeline
       # Fallback to us-east-1 if vars.AWS_REGION not set; matches Terraform default.
       AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+      # Fallback to the Terraform-defined ECR repo name if vars.ECR_REPOSITORY unset.
+      ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY || 'reddit-finance-pipeline' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -61,7 +63,7 @@ jobs:
 
       - name: Build and push image
         env:
-          ECR_URI: ${{ steps.login-ecr.outputs.registry }}/${{ vars.ECR_REPOSITORY }}
+          ECR_URI: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}
         run: |
           docker buildx build \
             --platform linux/amd64 \
@@ -72,7 +74,7 @@ jobs:
 
       - name: Register new task-definition revision
         env:
-          ECR_URI: ${{ steps.login-ecr.outputs.registry }}/${{ vars.ECR_REPOSITORY }}
+          ECR_URI: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}
         run: |
           aws ecs describe-task-definition \
             --task-definition "$TASK_FAMILY" \
