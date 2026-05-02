@@ -41,6 +41,8 @@ jobs:
 
     env:
       TASK_FAMILY: reddit-finance-pipeline
+      # Fallback to us-east-1 if vars.AWS_REGION not set; matches Terraform default.
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -49,7 +51,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ vars.AWS_REGION }}
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
         id: login-ecr
