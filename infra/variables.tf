@@ -22,9 +22,9 @@ variable "tf_state_bucket" {
 }
 
 variable "schedule_cron" {
-  description = "EventBridge Scheduler cron expression (UTC)"
+  description = "EventBridge Scheduler cron expression (interpreted in schedule's timezone, set in main.tf)"
   type        = string
-  default     = "cron(0 6 * * ? *)" # 06:00 UTC daily
+  default     = "cron(0 20 * * ? *)" # 20:00 Europe/Kyiv daily
 }
 
 variable "github_repo" {
