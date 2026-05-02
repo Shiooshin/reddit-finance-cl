@@ -9,9 +9,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Install Python dependencies (layer cached separately from source code)
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Install Poetry — single source of truth for dependencies is pyproject.toml + poetry.lock
+RUN pip install --no-cache-dir poetry==2.1.3
+
+# Install Python dependencies (layer cached separately from source code).
+# --without dev: skip pytest/mypy/ruff. --no-root: don't install the project itself
+# (source is copied later; PYTHONPATH below makes it importable).
+COPY pyproject.toml poetry.lock ./
+RUN poetry config virtualenvs.create false \
+ && poetry install --without dev --no-root --no-interaction --no-ansi
 
 # Install Playwright's pinned Chromium binary + all required system libraries
 RUN playwright install chromium && playwright install-deps chromium
