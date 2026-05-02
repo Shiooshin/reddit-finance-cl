@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import random
 from datetime import UTC, datetime
 from typing import Any
 
-from playwright.async_api import BrowserContext, async_playwright
+from playwright.async_api import BrowserContext, Page, async_playwright
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from main.config import get_config
@@ -38,10 +39,12 @@ async def _delay(lo: float = 1.0, hi: float = 3.0) -> None:
 class PlaywrightScraper:
     """Fetches posts and comments from a subreddit via Reddit's JSON API.
 
-    Uses a Playwright browser context for user-agent and session management,
-    but calls Reddit's public .json endpoints directly rather than intercepting
-    the browser-rendered page (Reddit's redesign no longer calls top.json).
-    Post and comment limits are read from config.json.
+    Performs a bootstrap navigation to the subreddit landing page first so
+    Chromium captures real reddit.com session cookies, then issues each JSON
+    request as a full browser navigation (`page.goto`) — real TLS handshake,
+    real session, browser network stack. This is the workaround for AWS
+    egress IPs being 403'd on raw HTTP `.json` requests while real browser
+    navigation still gets through.
     """
 
     def __init__(self) -> None:
@@ -71,41 +74,62 @@ class PlaywrightScraper:
                 await browser.close()
 
     async def _scrape(self, context: BrowserContext) -> list[Post]:
-        raw_posts = await self._fetch_listing(context)
-        log.info(
-            "Collected %d raw posts from r/%s",
-            len(raw_posts),
-            self._cfg.subreddit,
-        )
+        page = await context.new_page()
+        try:
+            await self._bootstrap_session(page)
 
-        posts: list[Post] = []
-        for raw in raw_posts:
-            post_id = raw.get("id", "")
-            await _delay(0.5, 1.5)
-            comments = await self._fetch_comments(context, post_id)
-            posts.append(_build_post(raw, comments))
-            log.debug(
-                "Post %s | score=%d | comments=%d | %r",
-                post_id,
-                raw.get("score", 0),
-                len(comments),
-                raw.get("title", ""),
+            raw_posts = await self._fetch_listing(page)
+            log.info(
+                "Collected %d raw posts from r/%s",
+                len(raw_posts),
+                self._cfg.subreddit,
             )
 
-        log.info("Fetched %d posts from r/%s", len(posts), self._cfg.subreddit)
-        return posts
+            posts: list[Post] = []
+            for raw in raw_posts:
+                post_id = raw.get("id", "")
+                await _delay(0.5, 1.5)
+                comments = await self._fetch_comments(page, post_id)
+                posts.append(_build_post(raw, comments))
+                log.debug(
+                    "Post %s | score=%d | comments=%d | %r",
+                    post_id,
+                    raw.get("score", 0),
+                    len(comments),
+                    raw.get("title", ""),
+                )
+
+            log.info(
+                "Fetched %d posts from r/%s", len(posts), self._cfg.subreddit
+            )
+            return posts
+        finally:
+            await page.close()
+
+    async def _bootstrap_session(self, page: Page) -> None:
+        """Navigate to the subreddit landing page so Chromium picks up
+        real reddit.com cookies before we start hitting the .json endpoints."""
+        url = f"{_BASE_URL}/r/{self._cfg.subreddit}/"
+        log.info("Bootstrapping session via %s", url)
+        response = await page.goto(url, wait_until="domcontentloaded")
+        if response is None or not response.ok:
+            log.warning(
+                "Bootstrap navigation returned HTTP %s — continuing anyway",
+                response.status if response else "—",
+            )
+        await _delay(1.0, 2.0)
 
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=10),
         reraise=True,
     )
-    async def _fetch_listing(
-        self, context: BrowserContext
-    ) -> list[dict[str, Any]]:
-        """Fetch posts directly from Reddit's JSON listing API.
+    async def _fetch_listing(self, page: Page) -> list[dict[str, Any]]:
+        """Fetch posts via full-browser navigation to Reddit's JSON listing.
 
-        Paginates via the 'after' token until post_limit is reached.
+        Each page is a `page.goto(...)` so the request goes through Chromium's
+        network stack (real TLS, the cookies set during bootstrap). Paginates
+        via the 'after' token until post_limit is reached.
         """
         subreddit = self._cfg.subreddit
         post_limit = self._cfg.post_limit
@@ -121,17 +145,10 @@ class PlaywrightScraper:
                 url += f"&after={after}"
 
             log.info("Fetching listing page: %s", url)
-            response = await context.request.get(url)
-
-            if not response.ok:
-                log.warning(
-                    "Listing request failed: HTTP %d for %s",
-                    response.status,
-                    url,
-                )
+            data = await _goto_json(page, url)
+            if data is None:
                 break
 
-            data = await response.json()
             children = data.get("data", {}).get("children", [])
             for child in children:
                 if child.get("kind") == "t3":
@@ -154,9 +171,9 @@ class PlaywrightScraper:
         reraise=True,
     )
     async def _fetch_comments(
-        self, context: BrowserContext, post_id: str
+        self, page: Page, post_id: str
     ) -> list[Comment]:
-        """Fetch top comments for a post via Reddit's JSON API."""
+        """Fetch top comments for a post via full-browser navigation."""
         limit = self._cfg.comment_limit
         url = (
             f"{_BASE_URL}/comments/{post_id}/.json"
@@ -165,16 +182,10 @@ class PlaywrightScraper:
 
         comments: list[Comment] = []
         try:
-            response = await context.request.get(url)
-            if not response.ok:
-                log.warning(
-                    "Comments request failed for post %s: HTTP %d",
-                    post_id,
-                    response.status,
-                )
+            body = await _goto_json(page, url)
+            if body is None:
                 return comments
 
-            body = await response.json()
             # Reddit returns [post_listing, comment_listing]
             if isinstance(body, list) and len(body) > 1:
                 children = body[1].get("data", {}).get("children", [])
@@ -208,6 +219,36 @@ class PlaywrightScraper:
 # ------------------------------------------------------------------ #
 # Helpers
 # ------------------------------------------------------------------ #
+
+
+async def _goto_json(page: Page, url: str) -> Any | None:
+    """Navigate the page to a Reddit JSON URL and return the parsed payload.
+
+    Returns None on non-OK status, missing response, or non-JSON body
+    (which usually indicates a Reddit interstitial / block page rendered
+    as HTML). Caller treats None as "give up on this URL".
+    """
+    response = await page.goto(url, wait_until="load")
+    if response is None or not response.ok:
+        log.warning(
+            "Request failed: HTTP %s for %s",
+            response.status if response else "—",
+            url,
+        )
+        return None
+
+    body = await response.text()
+    try:
+        return json.loads(body)
+    except json.JSONDecodeError:
+        log.warning(
+            "Non-JSON response for %s — likely an interstitial. "
+            "First 200 chars: %r",
+            url,
+            body[:200],
+        )
+        return None
+
 
 def _build_post(raw: dict[str, Any], comments: list[Comment]) -> Post:
     return Post(
