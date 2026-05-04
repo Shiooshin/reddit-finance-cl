@@ -89,7 +89,11 @@ class RSSScraper:
                     status, post_id,
                 )
                 return []
-            return [_build_comment(e, post_id) for e in feed.entries[:limit]]
+            real_entries = [
+                e for e in feed.entries
+                if "t3_" not in getattr(e, "id", "")
+            ]
+            return [_build_comment(e, post_id) for e in real_entries[:limit]]
         except Exception as exc:
             log.warning("Comment fetch failed for post %s: %s", post_id, exc)
             return []
