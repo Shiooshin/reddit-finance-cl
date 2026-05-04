@@ -32,7 +32,6 @@ log = get_logger(__name__)
 _BASE_URL = "https://www.reddit.com"
 _USER_AGENT = "reddit-insight-engine/0.1"
 _T3_PREFIX = "tag:reddit.com,2008:t3_"
-_T1_PREFIX = "tag:reddit.com,2008:t1_"
 
 
 class RSSScraper:
@@ -99,26 +98,28 @@ class RSSScraper:
 # --- Helpers ---
 
 
-def _strip_prefix(value: str, prefix: str) -> str:
-    return value[len(prefix):] if value.startswith(prefix) else ""
+def _extract_id(raw_id: str, marker: str) -> str:
+    """Extract a bare Reddit ID from various Atom <id> formats.
 
+    Handles both the tag URI format (tag:reddit.com,2008:<marker><id>)
+    and the URL format (https://...<marker><id>).
 
-def _extract_post_id(raw_id: str) -> str:
-    """Extract a bare post ID from various Reddit id formats.
-
-    Handles both the Atom tag URI format (tag:reddit.com,2008:t3_<id>)
-    and the URL format (https://...t3_<id> or https://.../comments/<id>/...).
+    ``marker`` is the type prefix without the trailing id, e.g. ``"t3_"``
+    for posts and ``"t1_"`` for comments.
     """
-    # Atom tag URI: tag:reddit.com,2008:t3_<id>
-    tag_id = _strip_prefix(raw_id, _T3_PREFIX)
-    if tag_id:
-        return tag_id
-    # URL format: ...t3_<id> (e.g. https://www.reddit.com/r/sub/top/t3_abc123)
-    marker = "t3_"
+    # Atom tag URI: tag:reddit.com,2008:<marker><id>
+    tag_prefix = f"tag:reddit.com,2008:{marker}"
+    if raw_id.startswith(tag_prefix):
+        return raw_id[len(tag_prefix):]
+    # URL format: ...<marker><id>
     idx = raw_id.find(marker)
     if idx != -1:
         return raw_id[idx + len(marker):]
     return ""
+
+
+def _extract_post_id(raw_id: str) -> str:
+    return _extract_id(raw_id, "t3_")
 
 
 def _parse_datetime(entry: Any) -> datetime:
@@ -157,7 +158,7 @@ def _build_post(entry: Any, post_id: str, comments: list[Comment]) -> Post:
 
 def _build_comment(entry: Any, post_id: str) -> Comment:
     return Comment(
-        id=_strip_prefix(getattr(entry, "id", ""), _T1_PREFIX),
+        id=_extract_id(getattr(entry, "id", ""), "t1_"),
         post_id=post_id,
         body=_selftext(entry),
         author=_parse_author(entry),
