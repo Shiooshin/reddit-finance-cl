@@ -55,8 +55,6 @@ class RedditScraper:
                 title=submission.title,
                 selftext=submission.selftext,
                 author=str(submission.author) if submission.author else "[deleted]",
-                score=submission.score,
-                num_comments=submission.num_comments,
                 created_at=datetime.fromtimestamp(
                     submission.created_utc, tz=UTC
                 ),
@@ -65,9 +63,8 @@ class RedditScraper:
             )
             posts.append(post)
             log.debug(
-                "Post %s | score=%d | comments=%d | %r",
+                "Post %s | comments=%d | %r",
                 post.id,
-                post.score,
                 len(post.comments),
                 post.title,
             )
@@ -96,7 +93,6 @@ class RedditScraper:
                 post_id=submission.id,
                 body=c.body,
                 author=str(c.author) if c.author else "[deleted]",
-                score=c.score,
                 created_at=datetime.fromtimestamp(c.created_utc, tz=UTC),
             )
             for c in top_comments

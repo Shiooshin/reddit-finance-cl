@@ -13,7 +13,6 @@ class Comment(BaseModel):
     post_id: str
     body: str
     author: str
-    score: int
     created_at: datetime
 
 
@@ -22,8 +21,6 @@ class Post(BaseModel):
     title: str
     selftext: str
     author: str
-    score: int
-    num_comments: int
     created_at: datetime
     url: str
     comments: list[Comment] = []

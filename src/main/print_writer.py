@@ -14,7 +14,7 @@ class PrintWriter(AbstractWriter):
             print(f"\n{'=' * 60}")
             print(f"Post:     {post.id}")
             print(f"Title:    {post.title}")
-            print(f"Author:   {post.author}  score={post.score}")
+            print(f"Author:   {post.author}")
             print(f"Created:  {post.created_at.strftime('%Y-%m-%d %H:%M UTC')}")
             print(f"URL:      {post.url}")
             if post.selftext:
@@ -22,7 +22,7 @@ class PrintWriter(AbstractWriter):
             if post.comments:
                 print("Comments:")
                 for comment in post.comments:
-                    print(f"  [{comment.score:+d}] {comment.author}: {comment.body}")
+                    print(f"  {comment.author}: {comment.body}")
         print(f"\n{'=' * 60}")
 
     def write_analytical_results(self, results: list[AnalysisResult]) -> None:
