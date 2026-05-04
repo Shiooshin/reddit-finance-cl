@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import re
 
 from main.analyzer import Analyzer
@@ -13,6 +14,7 @@ log = get_logger(__name__)
 _MAX_TEXT_LENGTH = 1000
 _MAX_COMMENTS = 5
 
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
 _URL_RE = re.compile(r"https?://\S+|www\.\S+")
 _WHITESPACE_RE = re.compile(r"\s+")
 
@@ -78,7 +80,9 @@ class Processor:
         )
 
     def _clean_text(self, text: str, truncate: bool = True) -> str:
-        """Strip URLs, normalise whitespace, and optionally truncate."""
+        """Decode HTML entities, strip tags, strip URLs, normalise whitespace."""
+        text = html.unescape(text)
+        text = _HTML_TAG_RE.sub(" ", text)
         text = _URL_RE.sub("", text)
         text = _WHITESPACE_RE.sub(" ", text).strip()
         if truncate and len(text) > _MAX_TEXT_LENGTH:
