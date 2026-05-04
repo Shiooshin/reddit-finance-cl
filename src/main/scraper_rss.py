@@ -17,6 +17,7 @@ comment_limit slices the first N entries from the feed.
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from time import mktime
 from typing import Any
@@ -30,8 +31,8 @@ from main.models import Comment, Post
 log = get_logger(__name__)
 
 _BASE_URL = "https://www.reddit.com"
+_ID_AFTER_MARKER = re.compile(r"([a-z0-9]+)")
 _USER_AGENT = "reddit-insight-engine/0.1"
-_T3_PREFIX = "tag:reddit.com,2008:t3_"
 
 
 class RSSScraper:
@@ -51,7 +52,7 @@ class RSSScraper:
         posts: list[Post] = []
         for entry in entries:
             raw_id = getattr(entry, "id", "")
-            post_id = _extract_post_id(raw_id)
+            post_id = _extract_id(raw_id, "t3_")
             if not post_id:
                 log.warning("Skipping entry with no parseable id: %r", raw_id)
                 continue
@@ -85,17 +86,17 @@ class RSSScraper:
             status = getattr(feed, "status", 0)
             if status != 200:
                 log.warning(
-                    "Comment fetch HTTP %s for post %s — empty comments",
-                    status, post_id,
+                    "Comment fetch HTTP %s for post %s (%s) — empty comments",
+                    status, post_id, url,
                 )
                 return []
             real_entries = [
                 e for e in feed.entries
-                if "t3_" not in getattr(e, "id", "")
+                if _extract_id(getattr(e, "id", ""), "t1_")
             ]
             return [_build_comment(e, post_id) for e in real_entries[:limit]]
         except Exception as exc:
-            log.warning("Comment fetch failed for post %s: %s", post_id, exc)
+            log.warning("Comment fetch failed for post %s (%s): %s", post_id, url, exc)
             return []
 
 
@@ -103,27 +104,19 @@ class RSSScraper:
 
 
 def _extract_id(raw_id: str, marker: str) -> str:
-    """Extract a bare Reddit ID from various Atom <id> formats.
+    """Return the Reddit id (post or comment) following `marker` (`t3_` or `t1_`).
 
-    Handles both the tag URI format (tag:reddit.com,2008:<marker><id>)
-    and the URL format (https://...<marker><id>).
-
-    ``marker`` is the type prefix without the trailing id, e.g. ``"t3_"``
-    for posts and ``"t1_"`` for comments.
+    Handles both the historical Atom URN format (`tag:reddit.com,2008:t3_<id>`)
+    and the URL format actually emitted by Reddit (`https://.../t3_<id>/...`).
     """
-    # Atom tag URI: tag:reddit.com,2008:<marker><id>
-    tag_prefix = f"tag:reddit.com,2008:{marker}"
-    if raw_id.startswith(tag_prefix):
-        return raw_id[len(tag_prefix):]
-    # URL format: ...<marker><id>
+    urn_prefix = f"tag:reddit.com,2008:{marker}"
+    if raw_id.startswith(urn_prefix):
+        return raw_id[len(urn_prefix):]
     idx = raw_id.find(marker)
-    if idx != -1:
-        return raw_id[idx + len(marker):]
-    return ""
-
-
-def _extract_post_id(raw_id: str) -> str:
-    return _extract_id(raw_id, "t3_")
+    if idx == -1:
+        return ""
+    m = _ID_AFTER_MARKER.match(raw_id, idx + len(marker))
+    return m.group(1) if m else ""
 
 
 def _parse_datetime(entry: Any) -> datetime:
