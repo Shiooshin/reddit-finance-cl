@@ -14,6 +14,13 @@ from main.writer import AbstractWriter
 
 log = get_logger(__name__)
 
+# TODO(one-time-migration 2026-05-04): schema dropped `score` and
+# `num_comments` from posts/comments tables. Pre-existing databases
+# from before this date have the old columns and will fail on insert.
+# Delete data/insights.duckdb before first run after this commit.
+# Once all environments have run on the new schema, this comment
+# can be removed.
+
 _CREATE_POSTS = """
 CREATE TABLE IF NOT EXISTS posts (
     id         VARCHAR PRIMARY KEY,
