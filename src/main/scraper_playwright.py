@@ -92,9 +92,8 @@ class PlaywrightScraper:
                 comments = await self._fetch_comments(page, post_id)
                 posts.append(_build_post(raw, comments))
                 log.debug(
-                    "Post %s | score=%d | comments=%d | %r",
+                    "Post %s | comments=%d | %r",
                     post_id,
-                    raw.get("score", 0),
                     len(comments),
                     raw.get("title", ""),
                 )
