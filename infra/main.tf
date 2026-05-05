@@ -223,7 +223,9 @@ data "aws_iam_policy_document" "ses_send" {
       "ses:SendEmail",
       "ses:SendRawEmail",
     ]
-    resources = [aws_ses_email_identity.sender[0].arn]
+    resources = [
+      "arn:aws:ses:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:identity/*",
+    ]
   }
 }
 
