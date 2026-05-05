@@ -32,6 +32,12 @@ variable "github_repo" {
   type        = string
 }
 
+variable "github_main_ref" {
+  description = "Git ref allowed to assume the deploy role (e.g. 'refs/heads/main')"
+  type        = string
+  default     = "refs/heads/main"
+}
+
 variable "email_from_address" {
   description = "Verified SES sender address (must be verified in the chosen region). Empty disables SES resources."
   type        = string

@@ -20,7 +20,7 @@ src/main/
 config.json          # Local config (gitignored — never commit)
 config.example.json  # Committed template with empty values
 scripts/
-  main.py         # Entry point — calls Pipeline().run()
+  run.py         # Entry point — calls Pipeline().run()
 ```
 
 ## Implementation Status
