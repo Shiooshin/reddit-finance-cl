@@ -22,7 +22,7 @@ from datetime import UTC, datetime
 from time import mktime
 from typing import Any
 
-import feedparser  # type: ignore[import-not-found]
+import feedparser  # type: ignore[import-untyped]
 
 from main.config import get_config
 from main.logger import get_logger
