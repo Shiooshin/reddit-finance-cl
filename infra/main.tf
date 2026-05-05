@@ -145,18 +145,6 @@ resource "aws_cloudwatch_log_group" "pipeline" {
   retention_in_days = 30
 }
 
-# ─── SSM Parameter (OpenAI API key) ──────────────────────────────────────────
-
-resource "aws_ssm_parameter" "openai_api_key" {
-  name  = "/reddit-finance/openai_api_key"
-  type  = "SecureString"
-  value = "PLACEHOLDER"
-
-  lifecycle {
-    ignore_changes = [value]
-  }
-}
-
 # ─── IAM: Task Execution Role (ECS control plane) ────────────────────────────
 
 resource "aws_iam_role" "task_execution" {
@@ -375,6 +363,7 @@ resource "aws_iam_role_policy" "github_deploy" {
           "ecr:CompleteLayerUpload",
           "ecr:PutImage",
           "ecr:DescribeImages",
+          "ecr:DescribeRepositories",
           "ecr:BatchGetImage",
         ]
         Resource = aws_ecr_repository.app.arn
@@ -477,71 +466,3 @@ resource "aws_scheduler_schedule" "daily" {
   }
 }
 
-# ─── GitHub OIDC + deploy role ───────────────────────────────────────────────
-
-resource "aws_iam_openid_connect_provider" "github" {
-  url             = "https://token.actions.githubusercontent.com"
-  client_id_list  = ["sts.amazonaws.com"]
-  thumbprint_list = ["6938fd4d98bab03faadb97b34396831e3780aea1"]
-}
-
-resource "aws_iam_role" "github_deploy" {
-  name = "reddit-finance-github-deploy"
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect    = "Allow"
-      Action    = "sts:AssumeRoleWithWebIdentity"
-      Principal = { Federated = aws_iam_openid_connect_provider.github.arn }
-      Condition = {
-        StringEquals = {
-          "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-        }
-        StringLike = {
-          "token.actions.githubusercontent.com:sub" = "repo:${var.github_repo}:*"
-        }
-      }
-    }]
-  })
-}
-
-resource "aws_iam_role_policy" "github_deploy" {
-  name = "deploy-permissions"
-  role = aws_iam_role.github_deploy.id
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect   = "Allow"
-        Action   = ["ecr:GetAuthorizationToken"]
-        Resource = "*"
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "ecr:BatchCheckLayerAvailability",
-          "ecr:CompleteLayerUpload",
-          "ecr:InitiateLayerUpload",
-          "ecr:PutImage",
-          "ecr:UploadLayerPart",
-          "ecr:BatchGetImage",
-          "ecr:DescribeRepositories",
-        ]
-        Resource = aws_ecr_repository.app.arn
-      },
-      {
-        Effect   = "Allow"
-        Action   = ["ecs:RegisterTaskDefinition", "ecs:DescribeTaskDefinition"]
-        Resource = "*"
-      },
-      {
-        Effect = "Allow"
-        Action = ["iam:PassRole"]
-        Resource = [
-          aws_iam_role.task_execution.arn,
-          aws_iam_role.task_role.arn,
-        ]
-      },
-    ]
-  })
-}
