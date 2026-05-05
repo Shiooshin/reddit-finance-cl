@@ -14,16 +14,21 @@ from main.writer import AbstractWriter
 
 log = get_logger(__name__)
 
+# TODO(one-time-migration 2026-05-04): schema dropped `score` and
+# `num_comments` from posts/comments tables. Pre-existing databases
+# from before this date have the old columns and will fail on insert.
+# Delete data/insights.duckdb before first run after this commit.
+# Once all environments have run on the new schema, this comment
+# can be removed.
+
 _CREATE_POSTS = """
 CREATE TABLE IF NOT EXISTS posts (
-    id           VARCHAR PRIMARY KEY,
-    title        VARCHAR NOT NULL,
-    selftext     VARCHAR NOT NULL,
-    author       VARCHAR NOT NULL,
-    score        INTEGER NOT NULL,
-    num_comments INTEGER NOT NULL,
-    created_at   TIMESTAMPTZ NOT NULL,
-    url          VARCHAR NOT NULL
+    id         VARCHAR PRIMARY KEY,
+    title      VARCHAR NOT NULL,
+    selftext   VARCHAR NOT NULL,
+    author     VARCHAR NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL,
+    url        VARCHAR NOT NULL
 )
 """
 
@@ -33,7 +38,6 @@ CREATE TABLE IF NOT EXISTS comments (
     post_id    VARCHAR NOT NULL,
     body       VARCHAR NOT NULL,
     author     VARCHAR NOT NULL,
-    score      INTEGER NOT NULL,
     created_at TIMESTAMPTZ NOT NULL
 )
 """
@@ -92,20 +96,20 @@ class DuckDBWriter(AbstractWriter):
         self._conn.execute(
             """
             INSERT INTO posts
-                (id, title, selftext, author, score, num_comments, created_at, url)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                (id, title, selftext, author, created_at, url)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
             [post.id, post.title, post.selftext, post.author,
-             post.score, post.num_comments, post.created_at, post.url],
+             post.created_at, post.url],
         )
         for comment in post.comments:
             self._conn.execute(
                 """
-                INSERT INTO comments (id, post_id, body, author, score, created_at)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO comments (id, post_id, body, author, created_at)
+                VALUES (?, ?, ?, ?, ?)
                 """,
                 [comment.id, comment.post_id, comment.body,
-                 comment.author, comment.score, comment.created_at],
+                 comment.author, comment.created_at],
             )
         log.debug("Saved post %s with %d comments", post.id, len(post.comments))
 

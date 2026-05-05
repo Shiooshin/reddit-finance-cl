@@ -51,7 +51,7 @@ def stubbed_pipeline(
         "writer": MagicMock(),
         "notifier": MagicMock(),
     }
-    monkeypatch.setattr("main.pipeline.PlaywrightScraper", lambda: stubs["scraper"])
+    monkeypatch.setattr("main.pipeline.get_scraper", lambda _name: stubs["scraper"])
     monkeypatch.setattr("main.pipeline.Processor", lambda: stubs["processor"])
     monkeypatch.setattr("main.pipeline.Analyzer", lambda: stubs["analyzer"])
     monkeypatch.setattr("main.pipeline.DuckDBWriter", lambda: stubs["writer"])

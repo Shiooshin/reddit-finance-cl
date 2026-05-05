@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -15,7 +16,8 @@ class RedditConfig(BaseModel):
     subreddit: str
     post_limit: int
     comment_limit: int
-    # PRAW-only — not used by PlaywrightScraper
+    scraper: Literal["rss", "playwright", "praw"] = "rss"
+    # PRAW-only — kept for praw scraper
     client_id: str = ""
     client_secret: str = ""
     user_agent: str = ""

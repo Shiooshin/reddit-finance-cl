@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from main.analyzer import Analyzer
+from main.config import get_config
 from main.duckdb_writer import DuckDBWriter
 from main.email_notifier import EmailNotifier
 from main.logger import get_logger
 from main.processor import Processor
-from main.scraper_playwright import PlaywrightScraper
+from main.scraper_factory import get_scraper
 
 log = get_logger(__name__)
 
@@ -16,7 +17,7 @@ class Pipeline:
     """Wires all modules together and defines execution order."""
 
     def __init__(self) -> None:
-        self.scraper = PlaywrightScraper()
+        self.scraper = get_scraper(get_config().reddit.scraper)
         self.processor = Processor()
         self.analyzer = Analyzer()
         self.writer: DuckDBWriter = DuckDBWriter()

@@ -92,9 +92,8 @@ class PlaywrightScraper:
                 comments = await self._fetch_comments(page, post_id)
                 posts.append(_build_post(raw, comments))
                 log.debug(
-                    "Post %s | score=%d | comments=%d | %r",
+                    "Post %s | comments=%d | %r",
                     post_id,
-                    raw.get("score", 0),
                     len(comments),
                     raw.get("title", ""),
                 )
@@ -201,7 +200,6 @@ class PlaywrightScraper:
                         post_id=post_id,
                         body=body_text,
                         author=d.get("author") or "[deleted]",
-                        score=d.get("score", 0),
                         created_at=datetime.fromtimestamp(
                             d.get("created_utc", 0), tz=UTC
                         ),
@@ -211,9 +209,9 @@ class PlaywrightScraper:
                 "Failed to fetch comments for post %s: %s", post_id, exc
             )
 
-        top = sorted(comments, key=lambda c: c.score, reverse=True)[:limit]
-        log.debug("Post %s: %d comments fetched", post_id, len(top))
-        return top
+        result = comments[:limit]
+        log.debug("Post %s: %d comments fetched", post_id, len(result))
+        return result
 
 
 # ------------------------------------------------------------------ #
@@ -256,8 +254,6 @@ def _build_post(raw: dict[str, Any], comments: list[Comment]) -> Post:
         title=raw.get("title", ""),
         selftext=raw.get("selftext", ""),
         author=raw.get("author") or "[deleted]",
-        score=raw.get("score", 0),
-        num_comments=raw.get("num_comments", 0),
         created_at=datetime.fromtimestamp(
             raw.get("created_utc", 0), tz=UTC
         ),
