@@ -67,6 +67,7 @@ def get_config() -> Config:
       - DB_PATH           overrides storage.db_path
       - OPENAI_API_KEY    overrides openai.api_key
       - EMAIL_RECIPIENTS  overrides email.recipients (comma-separated)
+      - EMAIL_FROM        overrides email.from_address
     """
     global _config
     if _config is None:
@@ -89,6 +90,11 @@ def get_config() -> Config:
                 r.strip() for r in recipients_env.split(",") if r.strip()
             ]
             new_email = _config.email.model_copy(update={"recipients": recipients})
+            _config = _config.model_copy(update={"email": new_email})
+
+        from_env = os.environ.get("EMAIL_FROM", "").strip()
+        if from_env:
+            new_email = _config.email.model_copy(update={"from_address": from_env})
             _config = _config.model_copy(update={"email": new_email})
 
     return _config

@@ -42,13 +42,17 @@ jobs:
         env:
           IMAGE: ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPO }}:${{ steps.tag.outputs.tag }}
         run: |
-          docker build -t "$IMAGE" .
-          docker push "$IMAGE"
+          docker buildx build \
+            --platform linux/amd64 \
+            --push \
+            -t "$IMAGE" \
+            .
           echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
 
       - name: Register new task-definition revision
         env:
           EMAIL_RECIPIENTS: ${{ vars.EMAIL_RECIPIENTS }}
+          EMAIL_FROM: ${{ vars.EMAIL_FROM }}
         run: |
           CURRENT=$(aws ecs describe-task-definition \
             --task-definition "$TD_FAMILY" \
@@ -56,11 +60,13 @@ jobs:
 
           NEW=$(echo "$CURRENT" | jq \
             --arg img "$IMAGE" \
-            --arg recipients "$EMAIL_RECIPIENTS" '
+            --arg recipients "$EMAIL_RECIPIENTS" \
+            --arg from "$EMAIL_FROM" '
             .containerDefinitions[0].image = $img
             | .containerDefinitions[0].environment |= (
-                map(select(.name != "EMAIL_RECIPIENTS"))
-                + [{name: "EMAIL_RECIPIENTS", value: $recipients}]
+                map(select(.name != "EMAIL_RECIPIENTS" and .name != "EMAIL_FROM"))
+                + [{name: "EMAIL_RECIPIENTS", value: $recipients},
+                   {name: "EMAIL_FROM",       value: $from}]
               )
             | del(.taskDefinitionArn, .revision, .status, .requiresAttributes,
                   .compatibilities, .registeredAt, .registeredBy)

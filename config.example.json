@@ -21,7 +21,7 @@
   },
   "email": {
     "recipients": [],
-    "from_address": "insight@example.com",
+    "from_address": "reddit.finance.poc@gmail.com",
     "aws_region": "eu-west-1",
     "subject_prefix": "[Reddit Insight]"
   }
