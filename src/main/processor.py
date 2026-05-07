@@ -6,13 +6,13 @@ import html
 import re
 
 from main.analyzer import Analyzer
+from main.config import get_config
 from main.logger import get_logger
 from main.models import AnalysisResult, Comment, Post
 
 log = get_logger(__name__)
 
 _MAX_TEXT_LENGTH = 1000
-_MAX_COMMENTS = 5
 
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
 _URL_RE = re.compile(r"https?://\S+|www\.\S+")
@@ -53,11 +53,12 @@ class Processor:
         - Normalises whitespace
         - Truncates selftext and comment bodies to _MAX_TEXT_LENGTH chars
         """
+        comment_limit = get_config().reddit.comment_limit
         cleaned_comments = [
             self._clean_comment(c)
             for c in post.comments
             if not self._is_empty(c.body)
-        ][:_MAX_COMMENTS]
+        ][:comment_limit]
 
         log.debug(
             "Post %s: %d → %d comments after cleaning",
