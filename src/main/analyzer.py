@@ -94,7 +94,18 @@ class Analyzer:
             ],
         )
 
-        raw = response.choices[0].message.content or "{}"
+        choice = response.choices[0]
+        if choice.finish_reason == "length":
+            log.error(
+                "Post %s: response truncated at max_completion_tokens=%d",
+                post.id,
+                self._max_tokens,
+            )
+            raise RuntimeError(
+                f"OpenAI response truncated for post {post.id}; raise max_tokens"
+            )
+
+        raw = choice.message.content or "{}"
         data = json.loads(raw)
 
         opportunities = [
